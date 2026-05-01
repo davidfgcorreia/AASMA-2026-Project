@@ -6,7 +6,16 @@ from typing import Dict, List, Optional, Tuple
 import pygame
 
 from .actions import Action, ActionType
-from .config import MAX_ACTIONS_PER_TURN, MAX_SILENCE_STEPS, SECTOR_COLS, SECTOR_ROWS, TILE_SIZE, WINDOW_PADDING
+from .config import (
+    MAP_MARGIN_X,
+    MAP_MARGIN_Y,
+    MAX_ACTIONS_PER_TURN,
+    MAX_SILENCE_STEPS,
+    SECTOR_COLS,
+    SECTOR_ROWS,
+    TILE_SIZE,
+    WINDOW_PADDING,
+)
 from .map_loader import MapData
 
 
@@ -37,9 +46,13 @@ class HumanController:
 
     def update_cursor(self, mouse_pos: Tuple[int, int], map_data: MapData) -> None:
         mx, my = mouse_pos
-        gx = (mx - WINDOW_PADDING) // TILE_SIZE
-        gy = (my - WINDOW_PADDING) // TILE_SIZE
-        if map_data.in_bounds(gx, gy):
+        local_x = mx - WINDOW_PADDING - MAP_MARGIN_X
+        local_y = my - WINDOW_PADDING - MAP_MARGIN_Y
+        if local_x < 0 or local_y < 0:
+            return
+        gx = local_x // TILE_SIZE
+        gy = local_y // TILE_SIZE
+        if map_data.in_bounds(int(gx), int(gy)):
             self.cursor = (int(gx), int(gy))
 
     def _handle_key(self, key: int) -> bool:

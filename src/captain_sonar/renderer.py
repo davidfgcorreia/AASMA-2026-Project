@@ -1,75 +1,144 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pygame
 
-from .config import PANEL_WIDTH, TILE_SIZE, WINDOW_PADDING
+from .config import (
+    MAP_BACKGROUND_PATH,
+    MAP_MARGIN_X,
+    MAP_MARGIN_Y,
+    PANEL_WIDTH,
+    TILE_SIZE,
+    WINDOW_PADDING,
+    MAP_INNER_PADDING_RIGHT,
+    MAP_INNER_PADDING_BOTTOM,
+)
 from .map_loader import MapData
 
 
 class Renderer:
-    def __init__(self, surface: pygame.Surface, map_data: MapData) -> None:
+    def __init__(self, surface: pygame.Surface, map_data: MapData, background_path: str | None = MAP_BACKGROUND_PATH) -> None:
         self.surface = surface
         self.map_data = map_data
         self.font = pygame.font.SysFont("Arial", 18)
+        self.background: pygame.Surface | None = None
+        self.grid_overlay = self._build_grid_overlay()
+        if background_path:
+            self._load_background(background_path)
 
     def draw(self, state, ui_state) -> None:
         self.surface.fill((18, 22, 28))
-        self._draw_grid(state.map_data)
-        self._draw_mines(state)
-        self._draw_subs(state)
-        self._draw_cursor(ui_state)
+        map_surf = self._compose_map_surface(state, ui_state)
+        self.surface.blit(map_surf, (WINDOW_PADDING, WINDOW_PADDING))
         self._draw_panel(state, ui_state)
 
-    def _draw_grid(self, map_data: MapData) -> None:
-        for y in range(map_data.height):
-            for x in range(map_data.width):
-                color = (30, 70, 120)
-                if map_data.is_blocked(x, y):
-                    color = (25, 40, 50)
-                rect = pygame.Rect(
-                    WINDOW_PADDING + x * TILE_SIZE,
-                    WINDOW_PADDING + y * TILE_SIZE,
-                    TILE_SIZE,
-                    TILE_SIZE,
-                )
-                pygame.draw.rect(self.surface, color, rect)
-                pygame.draw.rect(self.surface, (10, 10, 10), rect, 1)
+    def _compose_map_surface(self, state, ui_state) -> pygame.Surface:
+        base_w, base_h = self._map_pixel_size()
+        surface = pygame.Surface((base_w, base_h), pygame.SRCALPHA)
+        # background
+        if self.background:
+            surface.blit(self.background, (0, 0))
+        else:
+            rect = pygame.Rect(0, 0, base_w, base_h)
+            pygame.draw.rect(surface, (30, 70, 120), rect)
+        # grid overlay and elements
+        if self.grid_overlay:
+            surface.blit(self.grid_overlay, (MAP_MARGIN_X, MAP_MARGIN_Y))
+        self._draw_mines_on(surface, state)
+        self._draw_subs_on(surface, state)
+        self._draw_cursor_on(surface, ui_state)
+        return surface
+
+    def _build_grid_overlay(self) -> pygame.Surface:
+        width_px = self.map_data.width * TILE_SIZE
+        height_px = self.map_data.height * TILE_SIZE
+        overlay = pygame.Surface((width_px, height_px), pygame.SRCALPHA)
+        line_color = (255, 255, 255, 80)
+        for x in range(self.map_data.width + 1):
+            xpos = x * TILE_SIZE
+            pygame.draw.line(overlay, line_color, (xpos, 0), (xpos, height_px))
+        for y in range(self.map_data.height + 1):
+            ypos = y * TILE_SIZE
+            pygame.draw.line(overlay, line_color, (0, ypos), (width_px, ypos))
+        return overlay
+
+
+    def _load_background(self, background_path: str) -> None:
+        path = self._resolve_background_path(background_path)
+        try:
+            image = pygame.image.load(str(path)).convert_alpha()
+        except (FileNotFoundError, pygame.error):
+            return
+        target_size = self._map_pixel_size()
+        if image.get_size() != target_size:
+            image = pygame.transform.smoothscale(image, target_size)
+        self.background = image
+
+    def _resolve_background_path(self, background_path: str) -> Path:
+        path = Path(background_path)
+        if path.is_absolute():
+            return path
+        return Path(__file__).resolve().parents[2] / path
+
+    def _map_origin(self) -> tuple[int, int]:
+        return (WINDOW_PADDING + MAP_MARGIN_X, WINDOW_PADDING + MAP_MARGIN_Y)
+
+    def _map_pixel_size(self) -> tuple[int, int]:
+        return (
+            self.map_data.width * TILE_SIZE + MAP_MARGIN_X + MAP_INNER_PADDING_RIGHT,
+            self.map_data.height * TILE_SIZE + MAP_MARGIN_Y + MAP_INNER_PADDING_BOTTOM,
+        )
 
     def _draw_subs(self, state) -> None:
+        # legacy: not used; drawing happens on composed surface
+        return
+
+    def _draw_subs_on(self, surface: pygame.Surface, state) -> None:
         colors = {"BLUE": (70, 200, 255), "RED": (240, 80, 80)}
+        origin_x, origin_y = MAP_MARGIN_X, MAP_MARGIN_Y
         for team, sub in state.subs.items():
             center = (
-                WINDOW_PADDING + sub.x * TILE_SIZE + TILE_SIZE // 2,
-                WINDOW_PADDING + sub.y * TILE_SIZE + TILE_SIZE // 2,
+                origin_x + sub.x * TILE_SIZE + TILE_SIZE // 2,
+                origin_y + sub.y * TILE_SIZE + TILE_SIZE // 2,
             )
-            pygame.draw.circle(self.surface, colors.get(team, (200, 200, 200)), center, TILE_SIZE // 3)
+            pygame.draw.circle(surface, colors.get(team, (200, 200, 200)), center, TILE_SIZE // 3)
 
     def _draw_mines(self, state) -> None:
+        return
+
+    def _draw_mines_on(self, surface: pygame.Surface, state) -> None:
+        origin_x, origin_y = MAP_MARGIN_X, MAP_MARGIN_Y
         for mine in state.mines:
             rect = pygame.Rect(
-                WINDOW_PADDING + mine.x * TILE_SIZE + TILE_SIZE // 4,
-                WINDOW_PADDING + mine.y * TILE_SIZE + TILE_SIZE // 4,
+                origin_x + mine.x * TILE_SIZE + TILE_SIZE // 4,
+                origin_y + mine.y * TILE_SIZE + TILE_SIZE // 4,
                 TILE_SIZE // 2,
                 TILE_SIZE // 2,
             )
-            pygame.draw.rect(self.surface, (180, 180, 60), rect)
+            pygame.draw.rect(surface, (180, 180, 60), rect)
 
     def _draw_cursor(self, ui_state) -> None:
+        return
+
+    def _draw_cursor_on(self, surface: pygame.Surface, ui_state) -> None:
         cursor = ui_state.get("cursor")
         if cursor is None:
             return
         cx, cy = cursor
+        origin_x, origin_y = MAP_MARGIN_X, MAP_MARGIN_Y
         rect = pygame.Rect(
-            WINDOW_PADDING + cx * TILE_SIZE,
-            WINDOW_PADDING + cy * TILE_SIZE,
+            origin_x + cx * TILE_SIZE,
+            origin_y + cy * TILE_SIZE,
             TILE_SIZE,
             TILE_SIZE,
         )
-        pygame.draw.rect(self.surface, (250, 250, 120), rect, 2)
+        pygame.draw.rect(surface, (250, 250, 120), rect, 2)
 
     def _draw_panel(self, state, ui_state) -> None:
-        panel_x = WINDOW_PADDING * 2 + state.map_data.width * TILE_SIZE
-        panel_rect = pygame.Rect(panel_x, WINDOW_PADDING, PANEL_WIDTH, state.map_data.height * TILE_SIZE)
+        map_width, map_height = self._map_pixel_size()
+        panel_x = WINDOW_PADDING * 2 + map_width
+        panel_rect = pygame.Rect(panel_x, WINDOW_PADDING, PANEL_WIDTH, map_height)
         pygame.draw.rect(self.surface, (24, 30, 38), panel_rect)
         title = self.font.render("Human Controller", True, (230, 230, 230))
         self.surface.blit(title, (panel_x + 12, WINDOW_PADDING + 8))

@@ -6,7 +6,16 @@ import random
 
 import pygame
 
-from .config import PANEL_WIDTH, TILE_SIZE, WINDOW_PADDING
+from .config import (
+    MAP_BACKGROUND_PATH,
+    MAP_MARGIN_X,
+    MAP_MARGIN_Y,
+    PANEL_WIDTH,
+    TILE_SIZE,
+    WINDOW_PADDING,
+    MAP_INNER_PADDING_RIGHT,
+    MAP_INNER_PADDING_BOTTOM,
+)
 from .event_log import EventLogger
 from .game_loop import GameLoop
 from .game_state import GameState, SubmarineState
@@ -27,8 +36,10 @@ def main() -> None:
     random.seed(args.seed)
     pygame.init()
     map_data = load_map(args.map)
-    width = WINDOW_PADDING * 3 + map_data.width * TILE_SIZE + PANEL_WIDTH
-    height = WINDOW_PADDING * 2 + map_data.height * TILE_SIZE
+    map_pixel_width = map_data.width * TILE_SIZE + MAP_MARGIN_X + MAP_INNER_PADDING_RIGHT
+    map_pixel_height = map_data.height * TILE_SIZE + MAP_MARGIN_Y + MAP_INNER_PADDING_BOTTOM
+    width = WINDOW_PADDING * 3 + map_pixel_width + PANEL_WIDTH
+    height = WINDOW_PADDING * 2 + map_pixel_height
     surface = pygame.display.set_mode((width, height))
     pygame.display.set_caption("Captain Sonar Prototype")
 
@@ -37,7 +48,7 @@ def main() -> None:
         "RED": SubmarineState(x=map_data.width - 2, y=map_data.height - 2),
     }
     state = GameState(map_data=map_data, subs=subs)
-    renderer = Renderer(surface, map_data)
+    renderer = Renderer(surface, map_data, background_path=MAP_BACKGROUND_PATH)
     log_dir = os.path.dirname(args.log)
     if log_dir:
         os.makedirs(log_dir, exist_ok=True)

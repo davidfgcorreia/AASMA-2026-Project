@@ -8,7 +8,16 @@ from typing import Dict, List
 import pygame
 
 from .actions import action_from_dict, order_actions
-from .config import PANEL_WIDTH, TILE_SIZE, WINDOW_PADDING
+from .config import (
+    MAP_BACKGROUND_PATH,
+    MAP_MARGIN_X,
+    MAP_MARGIN_Y,
+    PANEL_WIDTH,
+    TILE_SIZE,
+    WINDOW_PADDING,
+    MAP_INNER_PADDING_RIGHT,
+    MAP_INNER_PADDING_BOTTOM,
+)
 from .game_state import GameState, SubmarineState
 from .map_loader import load_map
 from .renderer import Renderer
@@ -63,11 +72,13 @@ def main() -> None:
     state = build_state(args.map, meta)
 
     pygame.init()
-    width = WINDOW_PADDING * 3 + state.map_data.width * TILE_SIZE + PANEL_WIDTH
-    height = WINDOW_PADDING * 2 + state.map_data.height * TILE_SIZE
+    map_pixel_width = state.map_data.width * TILE_SIZE + MAP_MARGIN_X + MAP_INNER_PADDING_RIGHT
+    map_pixel_height = state.map_data.height * TILE_SIZE + MAP_MARGIN_Y + MAP_INNER_PADDING_BOTTOM
+    width = WINDOW_PADDING * 3 + map_pixel_width + PANEL_WIDTH
+    height = WINDOW_PADDING * 2 + map_pixel_height
     surface = pygame.display.set_mode((width, height))
     pygame.display.set_caption("Captain Sonar Replay")
-    renderer = Renderer(surface, state.map_data)
+    renderer = Renderer(surface, state.map_data, background_path=MAP_BACKGROUND_PATH)
 
     clock = pygame.time.Clock()
     index = 0

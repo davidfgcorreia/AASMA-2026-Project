@@ -36,7 +36,8 @@ class EventLogger:
     def _serialize(self, item: Any) -> Any:
         if isinstance(item, Action):
             return action_to_dict(item)
-        if is_dataclass(item):
+        # asdict expects a dataclass instance, not a dataclass type
+        if is_dataclass(item) and not isinstance(item, type):
             return asdict(item)
         if isinstance(item, dict):
             return {key: self._serialize(value) for key, value in item.items()}
