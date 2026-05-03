@@ -82,6 +82,7 @@ ehthumbs.db
 *.log
 *.sqlite3
 *.db
+logs/*
 
 # Temporary and backup files
 *.swp

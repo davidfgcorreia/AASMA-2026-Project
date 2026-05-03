@@ -28,6 +28,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--map", default="assets/maps/default_map.json")
     parser.add_argument("--log", default="logs/game_log.jsonl")
     parser.add_argument("--seed", type=int, default=1337)
+    parser.add_argument("--two-human", action="store_true", default=True, help="Enable two human teams (default)")
+    parser.add_argument("--ai-red", action="store_true", help="Use AI for RED team instead")
     return parser.parse_args()
 
 
@@ -53,7 +55,8 @@ def main() -> None:
     if log_dir:
         os.makedirs(log_dir, exist_ok=True)
     logger = EventLogger(args.log)
-    loop = GameLoop(state, renderer, logger, seed=args.seed, map_name=args.map)
+    two_human_teams = not args.ai_red
+    loop = GameLoop(state, renderer, logger, seed=args.seed, map_name=args.map, two_human_teams=two_human_teams)
     loop.run()
 
 

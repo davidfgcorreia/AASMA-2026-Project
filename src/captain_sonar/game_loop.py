@@ -5,7 +5,7 @@ from typing import List
 
 import pygame
 
-from .actions import Action, order_actions
+from .actions import Action, ActionType, order_actions
 from .ai_placeholders import choose_actions
 from .config import DEFAULT_SEED, FPS
 from .event_log import EventLogger
@@ -23,12 +23,15 @@ class GameLoop:
         logger: EventLogger | None = None,
         seed: int = DEFAULT_SEED,
         map_name: str = "unknown",
+        two_human_teams: bool = True,
     ) -> None:
         self.state = state
         self.renderer = renderer
         self.logger = logger
         self.clock = pygame.time.Clock()
-        self.human = HumanController(team="BLUE")
+        self.human_blue = HumanController(team="BLUE")
+        self.human_red = HumanController(team="RED") if two_human_teams else None
+        self.two_human_teams = two_human_teams
         self.rng = random.Random(seed)
         self.belief = BeliefTracker(state.map_data)
         if self.logger:
@@ -37,29 +40,98 @@ class GameLoop:
 
     def run(self) -> None:
         running = True
+        active_team = "BLUE"  # Start with BLUE team
+        phase_by_team = {"BLUE": "move", "RED": "move"}
         while running:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    running = False
-                else:
-                    self.human.handle_event(event, self.state.map_data)
-            self.human.update_cursor(pygame.mouse.get_pos(), self.state.map_data)
-            if self.human.confirmed and not self.state.game_over:
-                actions = order_actions(self._collect_actions())
+            active_controller = self.human_blue if active_team == "BLUE" else self.human_red
+            active_phase = phase_by_team.get(active_team, "move")
+
+            if not self.two_human_teams and active_team == "RED" and not self.state.game_over:
+                actions = order_actions(choose_actions("RED", self.rng, self.state))
                 self.state.apply_actions(actions)
                 self.belief.update(self.state.events)
                 if self.logger:
                     self.logger.log_turn(self.state.turn, actions, self.state.events)
-                self.human.reset_turn()
-            ui_state = self.human.ui_state()
+                active_team = "BLUE"
+                phase_by_team["RED"] = "move"
+                continue
+            
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+                elif active_controller:
+                    active_controller.handle_event(event, self.state.map_data)
+            
+            if active_controller:
+                active_controller.update_cursor(pygame.mouse.get_pos(), self.state.map_data)
+            
+            # Resolve the active team's current phase when confirmed.
+            if active_controller and active_controller.confirmed and not self.state.game_over:
+                phase_handled = False
+                if active_phase == "move":
+                    if self._is_valid_move_phase_queue(active_controller.queue):
+                        actions = order_actions(list(active_controller.queue))
+                        self.state.apply_actions(actions)
+                        self.belief.update(self.state.events)
+                        if self.logger:
+                            self.logger.log_turn(self.state.turn, actions, self.state.events)
+                        active_controller.reset_turn()
+                        phase_by_team[active_team] = "system"
+                        phase_handled = True
+                else:
+                    if self._is_valid_system_phase_queue(active_controller.queue):
+                        actions = order_actions(list(active_controller.queue))
+                        self.state.apply_actions(actions)
+                        self.belief.update(self.state.events)
+                        if self.logger:
+                            self.logger.log_turn(self.state.turn, actions, self.state.events)
+                        active_controller.reset_turn()
+                        phase_by_team[active_team] = "move"
+                        active_team = "RED" if active_team == "BLUE" else "BLUE"
+                        phase_handled = True
+
+                if not phase_handled:
+                    active_controller.confirmed = False
+            
+            # Get UI state from active team
+            ui_state = active_controller.ui_state() if active_controller else {}
+            ui_state["active_team"] = active_team
+            ui_state["turn_phase"] = phase_by_team.get(active_team, "move")
+            
             cursor = ui_state.get("cursor")
             if cursor is not None:
                 ui_state["belief_prob"] = self.belief.probability_at(cursor[0], cursor[1])
+            
             self.renderer.draw(self.state, ui_state)
             pygame.display.flip()
             self.clock.tick(FPS)
 
     def _collect_actions(self) -> List[Action]:
-        actions = list(self.human.queue)
-        actions.extend(choose_actions("RED", self.rng, self.state))
+        actions = list(self.human_blue.queue)
+        if self.human_red:
+            # Two human teams
+            actions.extend(self.human_red.queue)
+        else:
+            # RED is AI
+            actions.extend(choose_actions("RED", self.rng, self.state))
         return actions
+
+    def _is_valid_move_phase_queue(self, queue: List[Action]) -> bool:
+        if len(queue) != 1:
+            return False
+        return queue[0].type in (ActionType.MOVE, ActionType.SILENCE)
+
+    def _is_valid_system_phase_queue(self, queue: List[Action]) -> bool:
+        if len(queue) > 1:
+            return False
+        if not queue:
+            return True
+        return queue[0].type in (
+            ActionType.TORPEDO,
+            ActionType.SONAR,
+            ActionType.DRONE,
+            ActionType.MINE,
+            ActionType.TRIGGER_MINE,
+            ActionType.REPAIR,
+            ActionType.SURFACE,
+        )
