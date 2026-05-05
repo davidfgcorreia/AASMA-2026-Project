@@ -51,7 +51,7 @@ class Renderer:
         if self.grid_overlay:
             surface.blit(self.grid_overlay, (MAP_MARGIN_X, MAP_MARGIN_Y))
         self._draw_mines_on(surface, state)
-        self._draw_subs_on(surface, state)
+        self._draw_subs_on(surface, state, ui_state)
         self._draw_cursor_on(surface, ui_state)
         return surface
 
@@ -94,10 +94,13 @@ class Renderer:
             self.map_data.height * TILE_SIZE + MAP_MARGIN_Y + MAP_INNER_PADDING_BOTTOM,
         )
 
-    def _draw_subs_on(self, surface: pygame.Surface, state) -> None:
+    def _draw_subs_on(self, surface: pygame.Surface, state, ui_state) -> None:
         colors = {"BLUE": (70, 200, 255), "RED": (240, 80, 80)}
+        active_team = str(ui_state.get("active_team", "BLUE"))
         origin_x, origin_y = MAP_MARGIN_X, MAP_MARGIN_Y
         for team, sub in state.subs.items():
+            if team != active_team:
+                continue
             center = (
                 origin_x + sub.x * TILE_SIZE + TILE_SIZE // 2,
                 origin_y + sub.y * TILE_SIZE + TILE_SIZE // 2,
@@ -159,7 +162,7 @@ class Renderer:
             y_offset = self._draw_engineer_board(panel_x + 12, y_offset, state, ui_state)
         else:
             y_offset = self._draw_game_info(panel_x + 12, y_offset, state)
-            y_offset = self._draw_submarines_status(panel_x + 12, y_offset, state)
+            y_offset = self._draw_submarines_status(panel_x + 12, y_offset, state, ui_state)
             y_offset = self._draw_systems_gauges(panel_x + 12, y_offset, state, ui_state)
             y_offset = self._draw_mines_status(panel_x + 12, y_offset, state)
             y_offset = self._draw_surface_status(panel_x + 12, y_offset, state)
@@ -348,35 +351,26 @@ class Renderer:
         
         return y + 40
 
-    def _draw_submarines_status(self, x: int, y: int, state) -> int:
-        """Display status of both submarines."""
-        header = self.font.render("SUBMARINES:", True, (150, 255, 150))
+    def _draw_submarines_status(self, x: int, y: int, state, ui_state) -> int:
+        """Display the active submarine status."""
+        active_team = str(ui_state.get("active_team", "BLUE"))
+        header = self.font.render("SUBMARINE:", True, (150, 255, 150))
         self.surface.blit(header, (x, y))
         y += 20
-        
-        # Blue team
-        blue = state.subs.get("BLUE")
-        if blue:
-            damage_color = (100, 200, 255) if blue.damage < 4 else (255, 100, 100)
-            blue_status = self.font.render(
-                f"BLUE: Pos({blue.x},{blue.y}) Dmg {blue.damage}/4",
-                True,
-                damage_color
-            )
-            self.surface.blit(blue_status, (x, y))
+
+        active = state.subs.get(active_team)
+        if active:
+            active_color = (100, 200, 255) if active_team == "BLUE" else (255, 150, 150)
+            active_header = self.font.render(f"ACTIVE TURN: {active_team}", True, active_color)
+            self.surface.blit(active_header, (x, y))
             y += 18
-        
-        # Red team
-        red = state.subs.get("RED")
-        if red:
-            damage_color = (255, 150, 150) if red.damage < 4 else (255, 100, 100)
-            red_status = self.font.render(
-                f"RED: Pos({red.x},{red.y}) Dmg {red.damage}/4",
+            active_status = self.font.render(
+                f"Pos({active.x},{active.y})  Dmg {active.damage}/4",
                 True,
-                damage_color
+                active_color,
             )
-            self.surface.blit(red_status, (x, y))
-            y += 18
+            self.surface.blit(active_status, (x, y))
+            y += 20
         
         return y + 8
 
