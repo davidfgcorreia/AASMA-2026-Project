@@ -33,7 +33,7 @@ class GameLoop:
         self.human_red = HumanController(team="RED") if two_human_teams else None
         self.two_human_teams = two_human_teams
         self.rng = random.Random(seed)
-        self.belief = BeliefTracker(state.map_data)
+        self.belief = BeliefTracker(state.map_data, own_team=self.human.team)
         if self.logger:
             subs = {team: {"x": sub.x, "y": sub.y} for team, sub in state.subs.items()}
             self.logger.log_header({"map": map_name, "seed": seed, "teams": list(state.subs.keys()), "subs": subs})

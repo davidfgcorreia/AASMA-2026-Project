@@ -8,7 +8,7 @@ import pygame
 
 
 def test_move_blocked():
-    map_data = MapData(width=2, height=2, tiles=[["#", "."], [".", "."]])
+    map_data = MapData(width=2, height=2, tiles=[[".", "#"], [".", "."]])
     state = GameState(map_data=map_data, subs={"BLUE": SubmarineState(x=0, y=0)})
     action = Action(actor="BLUE", type=ActionType.MOVE, payload={"direction": "E"})
     state.apply_actions([action])
