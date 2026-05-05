@@ -51,6 +51,7 @@ class Renderer:
         if self.grid_overlay:
             surface.blit(self.grid_overlay, (MAP_MARGIN_X, MAP_MARGIN_Y))
         self._draw_mines_on(surface, state)
+        self._draw_trajectories_on(surface, state, ui_state)
         self._draw_subs_on(surface, state, ui_state)
         self._draw_cursor_on(surface, ui_state)
         return surface
@@ -93,6 +94,28 @@ class Renderer:
             self.map_data.width * TILE_SIZE + MAP_MARGIN_X + MAP_INNER_PADDING_RIGHT,
             self.map_data.height * TILE_SIZE + MAP_MARGIN_Y + MAP_INNER_PADDING_BOTTOM,
         )
+
+    def _draw_trajectories_on(self, surface: pygame.Surface, state, ui_state) -> None:
+        colors = {"BLUE": (70, 200, 255, 140), "RED": (240, 80, 80, 140)}
+        active_team = str(ui_state.get("active_team", "BLUE"))
+        origin_x, origin_y = MAP_MARGIN_X, MAP_MARGIN_Y
+
+        trajectory = getattr(state, "trajectory", {})
+        for team, path in trajectory.items():
+            if team != active_team or len(path) < 2:
+                continue
+            color = colors.get(team, (200, 200, 200, 140))
+            pixel_path = [
+                (
+                    origin_x + px * TILE_SIZE + TILE_SIZE // 2,
+                    origin_y + py * TILE_SIZE + TILE_SIZE // 2,
+                )
+                for px, py in path
+            ]
+            for i in range(1, len(pixel_path)):
+                pygame.draw.line(surface, color[:3], pixel_path[i - 1], pixel_path[i], 2)
+            for px, py in pixel_path[:-1]:
+                pygame.draw.circle(surface, color[:3], (px, py), 3)
 
     def _draw_subs_on(self, surface: pygame.Surface, state, ui_state) -> None:
         colors = {"BLUE": (70, 200, 255), "RED": (240, 80, 80)}

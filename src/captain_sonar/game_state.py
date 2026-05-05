@@ -111,6 +111,7 @@ class GameState:
     
     # === Map and Navigation ===
     routes: Dict[str, set[Tuple[int, int]]] = field(default_factory=dict)
+    trajectory: Dict[str, List[Tuple[int, int]]] = field(default_factory=dict)
     mines: List[MineState] = field(default_factory=list)
     
     # === Systems (First Mate) ===
@@ -126,6 +127,7 @@ class GameState:
     def __post_init__(self) -> None:
         """Initialize game state to valid defaults."""
         self._init_routes()
+        self._init_trajectory()
         self._init_gauges()
         self._init_system_flags()
         self._init_surface_state()
@@ -197,6 +199,14 @@ class GameState:
         if not self.routes:
             self.routes = {
                 team: {(sub.x, sub.y)}
+                for team, sub in self.subs.items()
+            }
+
+    def _init_trajectory(self) -> None:
+        """Initialize ordered trajectory lists from starting positions."""
+        if not self.trajectory:
+            self.trajectory = {
+                team: [(sub.x, sub.y)]
                 for team, sub in self.subs.items()
             }
 
@@ -376,6 +386,7 @@ class GameState:
         # Move submarine
         sub.x, sub.y = nx, ny
         self.routes[action.actor].add((nx, ny))
+        self.trajectory[action.actor].append((nx, ny))
         
         # Engineer crosses out a breakdown symbol for the announced direction.
         breakdown_choice = action.payload.get("breakdown_choice")
@@ -436,6 +447,7 @@ class GameState:
             
             sub.x, sub.y = nx, ny
             self.routes[action.actor].add((nx, ny))
+            self.trajectory[action.actor].append((nx, ny))
             moved += 1
         
         # Silence also creates a breakdown tied to the announced direction.
@@ -750,6 +762,7 @@ class GameState:
         
         self.skip_turns[actor] = SURFACE_SKIP_TURNS
         self.routes[actor] = {(sub.x, sub.y)}
+        self.trajectory[actor] = [(sub.x, sub.y)]
         self.last_action_system[actor] = False
         
         self._clear_all_breakdowns(actor)
