@@ -550,8 +550,12 @@ class Renderer:
         y += 16
 
         if turn_phase == "move":
+            silence_steps = int(ui_state.get("silence_steps", 4))
+            active_action = str(ui_state.get("active_action") or "")
+            silence_hint = f"F silence ({silence_steps} steps, Q/E adjust)" if active_action == "SILENCE" else "F silence | Q/E steps when F active"
             hints = [
-                "WASD move | F silence",
+                f"WASD move | {silence_hint}",
+                "C surface",
                 "1-6 choose charge to load",
                 "P engineer board",
                 "Enter confirm move phase",
@@ -561,7 +565,7 @@ class Renderer:
             hints = [
                 "T torpedo | O sonar",
                 "V drone | M mine | G trigger",
-                "C surface | R repair",
+                "R repair",
                 "Space/click queue selected system",
                 "Enter confirm (or skip with empty queue)",
                 "P engineer board",

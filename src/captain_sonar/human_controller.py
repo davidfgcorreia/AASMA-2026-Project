@@ -29,6 +29,7 @@ class HumanController:
     queue: List[Action] = field(default_factory=list)
     confirmed: bool = False
     charge_choice: str = "torpedo"
+    silence_steps: int = MAX_SILENCE_STEPS
     show_engineer_board: bool = False
     engineer_direction: str = "N"
     engineer_index: int = -1
@@ -42,6 +43,7 @@ class HumanController:
         self.queue.clear()
         self.confirmed = False
         self.active_action = None
+        self.silence_steps = MAX_SILENCE_STEPS
         self.engineer_index = -1
         self.engineer_button_id = ""
         self.engineer_circuit_part = "not"
@@ -85,6 +87,12 @@ class HumanController:
             return True
         if key == pygame.K_f:
             self.active_action = ActionType.SILENCE
+            return True
+        if key == pygame.K_q and self.active_action == ActionType.SILENCE:
+            self.silence_steps = max(1, self.silence_steps - 1)
+            return True
+        if key == pygame.K_e and self.active_action == ActionType.SILENCE:
+            self.silence_steps = min(MAX_SILENCE_STEPS, self.silence_steps + 1)
             return True
         if key == pygame.K_o:
             self.active_action = ActionType.SONAR
@@ -231,7 +239,6 @@ class HumanController:
                 ActionType.MINE,
                 ActionType.TRIGGER_MINE,
                 ActionType.REPAIR,
-                ActionType.SURFACE,
             )
             for action in self.queue
         )
@@ -302,7 +309,7 @@ class HumanController:
                 type=ActionType.SILENCE,
                 payload={
                     "direction": direction,
-                    "steps": MAX_SILENCE_STEPS,
+                    "steps": self.silence_steps,
                     "charge": self.charge_choice,
                     "breakdown_choice": self._engineer_choice_payload(direction),
                 },
@@ -345,6 +352,7 @@ class HumanController:
             "queue": [self._format_action(action) for action in self.queue],
             "cursor": self.cursor,
             "charge_choice": self.charge_choice,
+            "silence_steps": self.silence_steps,
             "show_engineer_board": self.show_engineer_board,
             "engineer_direction": self._current_engineer_direction(),
             "engineer_choice": self._engineer_choice_payload(None),

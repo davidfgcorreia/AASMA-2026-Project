@@ -47,13 +47,26 @@ class GameLoop:
             active_phase = phase_by_team.get(active_team, "move")
 
             if not self.two_human_teams and active_team == "RED" and not self.state.game_over:
-                actions = order_actions(choose_actions("RED", self.rng, self.state))
+                if self.state.skip_turns.get("RED", 0) > 0:
+                    self.state.apply_actions([])
+                    self.belief.update(self.state.events)
+                    active_team = "BLUE"
+                    phase_by_team["RED"] = "move"
+                    continue
+                actions = order_actions(choose_actions("RED", self.rng, self.state, active_phase))
                 self.state.apply_actions(actions)
                 self.belief.update(self.state.events)
                 if self.logger:
                     self.logger.log_turn(self.state.turn, actions, self.state.events)
-                active_team = "BLUE"
-                phase_by_team["RED"] = "move"
+                if active_phase == "move":
+                    if self._team_just_surfaced("RED"):
+                        phase_by_team["RED"] = "move"
+                        active_team = "BLUE"
+                    else:
+                        phase_by_team["RED"] = "system"
+                else:
+                    phase_by_team["RED"] = "move"
+                    active_team = "BLUE"
                 continue
             
             for event in pygame.event.get():
@@ -65,8 +78,16 @@ class GameLoop:
             if active_controller:
                 active_controller.update_cursor(pygame.mouse.get_pos(), self.state.map_data)
             
+            # Auto-advance surfaced teams without waiting for input.
+            if not self.state.game_over and self.state.skip_turns.get(active_team, 0) > 0:
+                self.state.apply_actions([])
+                self.belief.update(self.state.events)
+                active_controller.reset_turn()
+                phase_by_team[active_team] = "move"
+                active_team = "RED" if active_team == "BLUE" else "BLUE"
+
             # Resolve the active team's current phase when confirmed.
-            if active_controller and active_controller.confirmed and not self.state.game_over:
+            elif active_controller and active_controller.confirmed and not self.state.game_over:
                 phase_handled = False
                 if active_phase == "move":
                     if self._is_valid_move_phase_queue(active_controller.queue):
@@ -76,7 +97,12 @@ class GameLoop:
                         if self.logger:
                             self.logger.log_turn(self.state.turn, actions, self.state.events)
                         active_controller.reset_turn()
-                        phase_by_team[active_team] = "system"
+                        # Surfacing ends the whole turn — skip system phase.
+                        if self._team_just_surfaced(active_team):
+                            phase_by_team[active_team] = "move"
+                            active_team = "RED" if active_team == "BLUE" else "BLUE"
+                        else:
+                            phase_by_team[active_team] = "system"
                         phase_handled = True
                 else:
                     if self._is_valid_system_phase_queue(active_controller.queue):
@@ -106,20 +132,13 @@ class GameLoop:
             pygame.display.flip()
             self.clock.tick(FPS)
 
-    def _collect_actions(self) -> List[Action]:
-        actions = list(self.human_blue.queue)
-        if self.human_red:
-            # Two human teams
-            actions.extend(self.human_red.queue)
-        else:
-            # RED is AI
-            actions.extend(choose_actions("RED", self.rng, self.state))
-        return actions
+    def _team_just_surfaced(self, team: str) -> bool:
+        return any(e.get("type") == "surface" and e.get("actor") == team for e in self.state.events)
 
     def _is_valid_move_phase_queue(self, queue: List[Action]) -> bool:
         if len(queue) != 1:
             return False
-        return queue[0].type in (ActionType.MOVE, ActionType.SILENCE)
+        return queue[0].type in (ActionType.MOVE, ActionType.SILENCE, ActionType.SURFACE)
 
     def _is_valid_system_phase_queue(self, queue: List[Action]) -> bool:
         if len(queue) > 1:
@@ -133,5 +152,4 @@ class GameLoop:
             ActionType.MINE,
             ActionType.TRIGGER_MINE,
             ActionType.REPAIR,
-            ActionType.SURFACE,
         )

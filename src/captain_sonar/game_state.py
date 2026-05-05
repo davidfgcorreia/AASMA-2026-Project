@@ -440,11 +440,8 @@ class GameState:
         moved = 0
         for _ in range(int(steps)):
             nx, ny = sub.x + dx, sub.y + dy
-            
             if self._route_blocked(action.actor, nx, ny):
-                self._resolve_surface(action.actor, forced=True)
-                return
-            
+                break
             sub.x, sub.y = nx, ny
             self.routes[action.actor].add((nx, ny))
             self.trajectory[action.actor].append((nx, ny))
@@ -547,15 +544,15 @@ class GameState:
             })
             return
         
-        # Space must not be blocked
-        if self._route_blocked(action.actor, tx, ty):
+        # Space must be in bounds and not an island
+        if not self.map_data.in_bounds(tx, ty) or self.map_data.is_blocked(tx, ty):
             self.events.append({
                 "type": "action_failed",
                 "reason": "mine blocked",
                 "action": action
             })
             return
-        
+
         # No mine already there
         if any(mine.x == tx and mine.y == ty for mine in self.mines):
             self.events.append({
