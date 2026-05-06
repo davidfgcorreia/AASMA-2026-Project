@@ -9,5 +9,6 @@ __all__ = [
 	"ai_placeholders",
 	"game_loop",
 	"belief_tracker",
+	"radio_operator",
 	"replay",
 ]
