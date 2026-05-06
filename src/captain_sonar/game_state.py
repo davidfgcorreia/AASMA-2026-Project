@@ -394,6 +394,7 @@ class GameState:
         self.events.append({
             "type": "move",
             "actor": action.actor,
+            "direction": direction,
             "to": (nx, ny),
             "charge": charge
         })
@@ -458,6 +459,7 @@ class GameState:
         self.events.append({
             "type": "silence",
             "actor": action.actor,
+            "direction": direction,
             "steps": moved,
             "to": (sub.x, sub.y),
             "charge": charge,

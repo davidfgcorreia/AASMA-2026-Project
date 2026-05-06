@@ -71,6 +71,15 @@ class Renderer:
         if max_p <= 0.0:
             return
 
+        # Use muted blue for Blue's belief, muted red for Red's belief
+        active_team = str(ui_state.get("active_team", "BLUE"))
+        if active_team == "RED":
+            # Red team's belief about Blue - use muted blue
+            base_color = (120, 160, 200)
+        else:
+            # Blue team's belief about Red - use muted red
+            base_color = (200, 120, 120)
+
         origin_x, origin_y = MAP_MARGIN_X, MAP_MARGIN_Y
         for y in range(self.map_data.height):
             for x in range(self.map_data.width):
@@ -93,7 +102,7 @@ class Renderer:
                     TILE_SIZE,
                     TILE_SIZE,
                 )
-                pygame.draw.rect(surface, (240, 80, 80, alpha), rect)
+                pygame.draw.rect(surface, (*base_color, alpha), rect)
 
     def _build_grid_overlay(self) -> pygame.Surface:
         width_px = self.map_data.width * TILE_SIZE

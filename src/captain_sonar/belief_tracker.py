@@ -63,6 +63,12 @@ class BeliefTracker:
                     false_info = event.get("false_info")
                     if isinstance(true_info, dict) and isinstance(false_info, dict):
                         self._apply_sonar(true_info, false_info)
+                elif etype == "explosion":
+                    hits = event.get("hits", [])
+                    impact = event.get("impact")
+                    # If explosion had no hits, opponent was NOT at that location
+                    if not hits and isinstance(impact, (list, tuple)) and len(impact) == 2:
+                        self._apply_torpedo_miss(impact[0], impact[1])
 
     def heatmap(self) -> List[List[float]]:
         return self._belief
@@ -201,6 +207,11 @@ class BeliefTracker:
                 b = pred_false(x, y)
                 if (a and not b) or (b and not a):
                     allowed.add((x, y))
+        self._apply_mask(allowed)
+
+    def _apply_torpedo_miss(self, x: int, y: int) -> None:
+        """Exclude a location from belief (torpedo missed there)."""
+        allowed = {(ox, oy) for oy in range(self.map_data.height) for ox in range(self.map_data.width) if not self.map_data.is_blocked(ox, oy) and (ox, oy) != (x, y)}
         self._apply_mask(allowed)
 
     def _cells_in_sector(self, sector: int) -> set[Tuple[int, int]]:
