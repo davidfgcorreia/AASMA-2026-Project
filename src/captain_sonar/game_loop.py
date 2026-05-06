@@ -33,7 +33,7 @@ class GameLoop:
         self.human_red = HumanController(team="RED") if two_human_teams else None
         self.two_human_teams = two_human_teams
         self.rng = random.Random(seed)
-        self.belief = BeliefTracker(state.map_data, own_team=self.human.team)
+        self.belief = BeliefTracker(state.map_data, own_team=self.human_blue.team)
         if self.logger:
             subs = {team: {"x": sub.x, "y": sub.y} for team, sub in state.subs.items()}
             self.logger.log_header({"map": map_name, "seed": seed, "teams": list(state.subs.keys()), "subs": subs})
@@ -101,6 +101,10 @@ class GameLoop:
             cursor = ui_state.get("cursor")
             if cursor is not None:
                 ui_state["belief_prob"] = self.belief.probability_at(cursor[0], cursor[1])
+
+            ui_state["belief_heatmap"] = self.belief.heatmap()
+            ui_state["belief_best_sector"] = self.belief.most_likely_sector()
+            ui_state["belief_best_cell"] = self.belief.most_likely_cell()
             
             self.renderer.draw(self.state, ui_state)
             pygame.display.flip()

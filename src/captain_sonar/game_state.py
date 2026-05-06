@@ -276,8 +276,10 @@ class GameState:
                     errors.append(f"{system} system not ready")
 
             # Must not be broken by engineer breakdowns.
-            if self._system_has_breakdown(action.actor, system):
-                errors.append(f"{system} system has breakdown")
+            # Triggering a mine is allowed even if the mine system is broken.
+            if action.type != ActionType.TRIGGER_MINE:
+                if self._system_has_breakdown(action.actor, system):
+                    errors.append(f"{system} system has breakdown")
 
             # Can't activate two systems in a row
             if self.last_action_system.get(action.actor, False):

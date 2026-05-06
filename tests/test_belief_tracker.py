@@ -46,3 +46,15 @@ def test_drone_response_filters_sector_membership():
     tracker.update([{"type": "drone", "actor": "BLUE", "sector": 1, "response": False, "enemy_sector": 2}])
     assert tracker.probability_at(0, 0) == 0.0
     assert tracker.probability_at(3, 3) > 0.0
+
+
+def test_sector_masses_and_most_likely_helpers():
+    map_data = MapData(width=4, height=4, tiles=[["."] * 4 for _ in range(4)])
+    tracker = BeliefTracker(map_data, own_team="BLUE")
+    tracker.set_point_prior(3, 3)
+
+    masses = tracker.sector_masses()
+    assert abs(sum(masses.values()) - 1.0) < 1e-9
+    # With SECTOR_ROWS=2 and SECTOR_COLS=2 (config), bottom-right is sector 4.
+    assert tracker.most_likely_sector() == 4
+    assert tracker.most_likely_cell() == (3, 3)

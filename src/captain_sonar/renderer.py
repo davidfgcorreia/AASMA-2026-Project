@@ -50,10 +50,50 @@ class Renderer:
         # grid overlay and elements
         if self.grid_overlay:
             surface.blit(self.grid_overlay, (MAP_MARGIN_X, MAP_MARGIN_Y))
+        self._draw_belief_heatmap_on(surface, ui_state)
         self._draw_mines_on(surface, state)
         self._draw_subs_on(surface, state, ui_state)
         self._draw_cursor_on(surface, ui_state)
         return surface
+
+    def _draw_belief_heatmap_on(self, surface: pygame.Surface, ui_state) -> None:
+        heatmap = ui_state.get("belief_heatmap")
+        if not isinstance(heatmap, list) or not heatmap:
+            return
+
+        max_p = 0.0
+        for row in heatmap:
+            if not isinstance(row, list):
+                continue
+            for p in row:
+                if isinstance(p, (int, float)) and p > max_p:
+                    max_p = float(p)
+        if max_p <= 0.0:
+            return
+
+        origin_x, origin_y = MAP_MARGIN_X, MAP_MARGIN_Y
+        for y in range(self.map_data.height):
+            for x in range(self.map_data.width):
+                if self.map_data.is_blocked(x, y):
+                    continue
+                try:
+                    p = float(heatmap[y][x])
+                except (IndexError, TypeError, ValueError):
+                    continue
+                if p <= 0.0:
+                    continue
+
+                intensity = (p / max_p) ** 0.5  # boost contrast for low probabilities
+                alpha = int(20 + 160 * intensity)
+                alpha = max(0, min(180, alpha))
+
+                rect = pygame.Rect(
+                    origin_x + x * TILE_SIZE,
+                    origin_y + y * TILE_SIZE,
+                    TILE_SIZE,
+                    TILE_SIZE,
+                )
+                pygame.draw.rect(surface, (240, 80, 80, alpha), rect)
 
     def _build_grid_overlay(self) -> pygame.Surface:
         width_px = self.map_data.width * TILE_SIZE
@@ -163,11 +203,53 @@ class Renderer:
         else:
             y_offset = self._draw_game_info(panel_x + 12, y_offset, state)
             y_offset = self._draw_submarines_status(panel_x + 12, y_offset, state, ui_state)
+            y_offset = self._draw_radio_belief(panel_x + 12, y_offset, ui_state)
             y_offset = self._draw_systems_gauges(panel_x + 12, y_offset, state, ui_state)
             y_offset = self._draw_mines_status(panel_x + 12, y_offset, state)
             y_offset = self._draw_surface_status(panel_x + 12, y_offset, state)
             y_offset = self._draw_queue(panel_x + 12, y_offset, ui_state)
         self._draw_controls_hints(panel_x + 12, y_offset, ui_state)
+
+    def _draw_radio_belief(self, x: int, y: int, ui_state) -> int:
+        """Compact belief status for the radio operator."""
+        heatmap = ui_state.get("belief_heatmap")
+        if not isinstance(heatmap, list) or not heatmap:
+            return y
+
+        header = self.font.render("RADIO BELIEF:", True, (255, 200, 160))
+        self.surface.blit(header, (x, y))
+        y += 20
+
+        cursor = ui_state.get("cursor")
+        belief_prob = ui_state.get("belief_prob")
+        if (
+            isinstance(cursor, tuple)
+            and len(cursor) == 2
+            and all(isinstance(v, int) for v in cursor)
+            and isinstance(belief_prob, (int, float))
+        ):
+            cx, cy = cursor
+            line = self.font.render(f"Cursor ({cx},{cy})  p={float(belief_prob):.3f}", True, (210, 210, 220))
+            self.surface.blit(line, (x, y))
+            y += 18
+
+        best_sector = ui_state.get("belief_best_sector")
+        best_cell = ui_state.get("belief_best_cell")
+        if isinstance(best_sector, int):
+            line = self.font.render(f"Best sector: S{best_sector}", True, (210, 210, 220))
+            self.surface.blit(line, (x, y))
+            y += 18
+        if (
+            isinstance(best_cell, tuple)
+            and len(best_cell) == 2
+            and all(isinstance(v, int) for v in best_cell)
+        ):
+            bx, by = best_cell
+            line = self.font.render(f"Best cell: ({bx},{by})", True, (210, 210, 220))
+            self.surface.blit(line, (x, y))
+            y += 18
+
+        return y + 6
 
     def _draw_engineer_board(self, x: int, y: int, state, ui_state) -> int:
         """Display the engineer control panel as the provided image with side controls."""

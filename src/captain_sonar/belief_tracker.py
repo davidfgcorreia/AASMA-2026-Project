@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Iterable, List, Tuple
+from typing import Dict, Iterable, List, Tuple
 
 from .map_loader import MapData
 from .config import MAX_SILENCE_STEPS, SECTOR_COLS, SECTOR_ROWS
@@ -71,6 +71,39 @@ class BeliefTracker:
         if not self.map_data.in_bounds(x, y):
             return 0.0
         return self._belief[y][x]
+
+    def sector_masses(self) -> Dict[int, float]:
+        """Return a probability mass per sector (1-indexed)."""
+        masses: Dict[int, float] = {}
+        for y in range(self.map_data.height):
+            for x in range(self.map_data.width):
+                if self.map_data.is_blocked(x, y):
+                    continue
+                p = self._belief[y][x]
+                if p <= 0.0:
+                    continue
+                sector = self._sector_for(x, y)
+                masses[sector] = masses.get(sector, 0.0) + p
+        return masses
+
+    def most_likely_sector(self) -> int | None:
+        masses = self.sector_masses()
+        if not masses:
+            return None
+        return max(masses, key=masses.get)
+
+    def most_likely_cell(self) -> Tuple[int, int] | None:
+        best: Tuple[int, int] | None = None
+        best_p = 0.0
+        for y in range(self.map_data.height):
+            for x in range(self.map_data.width):
+                if self.map_data.is_blocked(x, y):
+                    continue
+                p = self._belief[y][x]
+                if p > best_p:
+                    best_p = p
+                    best = (x, y)
+        return best if best_p > 0.0 else None
 
     def _infer_enemy(self, events: Iterable[dict]) -> str | None:
         for event in events:
