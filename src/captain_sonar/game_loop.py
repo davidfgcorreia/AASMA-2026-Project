@@ -33,7 +33,9 @@ class GameLoop:
         self.human_red = HumanController(team="RED") if two_human_teams else None
         self.two_human_teams = two_human_teams
         self.rng = random.Random(seed)
-        self.belief = BeliefTracker(state.map_data)
+        # Two separate belief trackers: one for each team's belief about opponent
+        self.belief_blue = BeliefTracker(state.map_data, own_team="BLUE")  # Blue's belief about Red
+        self.belief_red = BeliefTracker(state.map_data, own_team="RED")    # Red's belief about Blue
         if self.logger:
             subs = {team: {"x": sub.x, "y": sub.y} for team, sub in state.subs.items()}
             self.logger.log_header({"map": map_name, "seed": seed, "teams": list(state.subs.keys()), "subs": subs})
@@ -49,7 +51,8 @@ class GameLoop:
             if not self.two_human_teams and active_team == "RED" and not self.state.game_over:
                 actions = order_actions(choose_actions("RED", self.rng, self.state))
                 self.state.apply_actions(actions)
-                self.belief.update(self.state.events)
+                self.belief_blue.update(self.state.events)
+                self.belief_red.update(self.state.events)
                 if self.logger:
                     self.logger.log_turn(self.state.turn, actions, self.state.events)
                 active_team = "BLUE"
@@ -72,7 +75,8 @@ class GameLoop:
                     if self._is_valid_move_phase_queue(active_controller.queue):
                         actions = order_actions(list(active_controller.queue))
                         self.state.apply_actions(actions)
-                        self.belief.update(self.state.events)
+                        self.belief_blue.update(self.state.events)
+                        self.belief_red.update(self.state.events)
                         if self.logger:
                             self.logger.log_turn(self.state.turn, actions, self.state.events)
                         active_controller.reset_turn()
@@ -82,7 +86,8 @@ class GameLoop:
                     if self._is_valid_system_phase_queue(active_controller.queue):
                         actions = order_actions(list(active_controller.queue))
                         self.state.apply_actions(actions)
-                        self.belief.update(self.state.events)
+                        self.belief_blue.update(self.state.events)
+                        self.belief_red.update(self.state.events)
                         if self.logger:
                             self.logger.log_turn(self.state.turn, actions, self.state.events)
                         active_controller.reset_turn()
@@ -98,9 +103,16 @@ class GameLoop:
             ui_state["active_team"] = active_team
             ui_state["turn_phase"] = phase_by_team.get(active_team, "move")
             
+            # Use the correct belief tracker for the active team
+            active_belief = self.belief_blue if active_team == "BLUE" else self.belief_red
+            
             cursor = ui_state.get("cursor")
             if cursor is not None:
-                ui_state["belief_prob"] = self.belief.probability_at(cursor[0], cursor[1])
+                ui_state["belief_prob"] = active_belief.probability_at(cursor[0], cursor[1])
+
+            ui_state["belief_heatmap"] = active_belief.heatmap()
+            ui_state["belief_best_sector"] = active_belief.most_likely_sector()
+            ui_state["belief_best_cell"] = active_belief.most_likely_cell()
             
             self.renderer.draw(self.state, ui_state)
             pygame.display.flip()
