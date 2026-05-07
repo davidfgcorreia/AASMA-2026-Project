@@ -56,14 +56,11 @@ The rules state the captain may move *up to* N spaces; stopping early because a 
 
 ---
 
-## Bug 6 — Mines could not be dropped on own route cells
+## Bug 6 — ~~Mines could not be dropped on own route cells~~ (REVERTED — was incorrect)
 
 **File:** `game_state.py` — `_resolve_mine`
 
-The mine-placement check called `_route_blocked`, which returns `True` for any cell in the submarine's route set. The rules only prohibit dropping mines on islands or cells already occupied by a mine; the player should be able to mine a cell they previously visited.
-
-- Replaced `_route_blocked` with an explicit check: `in_bounds` and `is_blocked` (island test) only.
-- The existing "no mine already there" check is kept.
+The original fix incorrectly removed the route check. Per the rules, *"The Captain cannot drop a mine in a space on his route (with a line drawn in it)."* The route check has been reinstated as a hard block.
 
 ---
 
@@ -77,3 +74,68 @@ The game loop enforces move-phase then system-phase for human players, but calle
 - Split into `_choose_move` (returns MOVE or SURFACE) and `_choose_system` (returns a weapon action or nothing).
 - The game loop passes `active_phase` to `choose_actions` and handles the AI's phase transitions with the same `_team_just_surfaced` check used for humans.
 - The AI's surfaced-state early exit mirrors the human path.
+
+---
+
+## Bug 8 — Surfacing skip counter was depleted by enemy phases, giving only ~1.5 turns
+
+**Files:** `game_state.py`, `game_loop.py`
+
+`apply_actions()` decremented `skip_turns` for every call — including the enemy's move phase and system phase — consuming all three skip-turns across roughly 1.5 enemy turns instead of 3. Additionally, after the last decrement the enemy received one extra full turn before the surfaced team regained control.
+
+- Removed the blanket decrement block from `apply_actions()`.
+- Each auto-advance path in the game loop now decrements `skip_turns[team]` explicitly, after `apply_actions([])` returns.
+- The auto-advance only switches `active_team` to the enemy when `skip_turns > 0` after decrement; when it hits 0 the surfaced team immediately regains their turn, giving the enemy exactly 3 full turns.
+
+---
+
+## Bug 9 — Blocked move forced a surface even when valid directions remained
+
+**File:** `game_state.py` — `_resolve_move`
+
+`_resolve_move` called `_resolve_surface(forced=True)` whenever the requested direction was blocked, even if other directions were still open. A forced surface (blackout) should only occur when **all four** orthogonal directions are blocked.
+
+- Added `_is_blackout(actor)` helper that checks all four neighbours.
+- `_resolve_move` now surfaces only when `_is_blackout` returns `True`; otherwise it emits an `action_rejected` event and returns, letting the player choose another direction.
+
+---
+
+## Bug 10 — Mine could be dropped on own route cells
+
+**File:** `game_state.py` — `_resolve_mine`
+
+The mine-placement check did not verify whether the target cell was part of the submarine's own route. Per the rules: *"The Captain cannot drop a mine in a space on his route (with a line drawn in it)."*
+
+- Added `(tx, ty) in self.routes.get(actor)` guard before deploying the mine; emits `action_failed` if violated.
+
+---
+
+## Bug 11 — Circuit self-repair permanently disabled after first repair
+
+**File:** `game_state.py` — `_repair_circuits`, `BreakdownState`
+
+`BreakdownState` carried a `circuits_status` dict that marked a circuit as permanently repaired after its first self-repair. Subsequent crossings of the same four symbols would never trigger the repair again within the same surface period, even though the rules allow it every time all four symbols are crossed.
+
+- Removed `circuits_status` from `BreakdownState`.
+- Removed the early-exit guard and the flag assignment from `_repair_circuits`; the check now runs on every call using only the live `crossed_by_direction` data.
+
+---
+
+## Bug 12 — Silence consumed its gauge even when the path was fully blocked
+
+**File:** `game_state.py` — `_resolve_silence`
+
+If the very first step of a silence move was blocked (island, own route, or own mine), `moved` stayed at 0 but the silence gauge was still consumed and a breakdown was still applied — wasting the system with no movement.
+
+- Added a `moved == 0` check immediately after the movement loop; if no steps were taken the action emits `action_failed` and returns before touching the gauge, breakdown, or `last_action_system`.
+
+---
+
+## Bug 13 — TRIGGER_MINE incorrectly subject to gauge/breakdown/system-ordering restrictions
+
+**File:** `game_state.py` — `SYSTEM_ACTION`, `_resolve_trigger_mine`
+
+`TRIGGER_MINE` was listed in `SYSTEM_ACTION`, causing it to be blocked by the "cannot activate two systems in a row" rule and by engineer breakdowns on the mine system. Per the rules, a mine can be triggered *"at any time, except while surfaced"* and *"whether or not any spaces on the mine gauge are marked"* — it is independent of the gauge-based system activation cycle.
+
+- Removed `TRIGGER_MINE` from `SYSTEM_ACTION`; the existing `action.type != ActionType.TRIGGER_MINE` gauge-ready bypass in `_validate_state` now naturally extends to the breakdown and ordering checks.
+- Changed `_resolve_trigger_mine` to set `last_action_system = False` so that triggering a mine does not block a subsequent system activation.

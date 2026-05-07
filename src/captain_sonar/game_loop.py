@@ -50,8 +50,10 @@ class GameLoop:
                 if self.state.skip_turns.get("RED", 0) > 0:
                     self.state.apply_actions([])
                     self.belief.update(self.state.events)
-                    active_team = "BLUE"
+                    self.state.skip_turns["RED"] = max(0, self.state.skip_turns.get("RED", 0) - 1)
                     phase_by_team["RED"] = "move"
+                    if self.state.skip_turns.get("RED", 0) > 0:
+                        active_team = "BLUE"
                     continue
                 actions = order_actions(choose_actions("RED", self.rng, self.state, active_phase))
                 self.state.apply_actions(actions)
@@ -83,8 +85,10 @@ class GameLoop:
                 self.state.apply_actions([])
                 self.belief.update(self.state.events)
                 active_controller.reset_turn()
+                self.state.skip_turns[active_team] = max(0, self.state.skip_turns.get(active_team, 0) - 1)
                 phase_by_team[active_team] = "move"
-                active_team = "RED" if active_team == "BLUE" else "BLUE"
+                if self.state.skip_turns.get(active_team, 0) > 0:
+                    active_team = "RED" if active_team == "BLUE" else "BLUE"
 
             # Resolve the active team's current phase when confirmed.
             elif active_controller and active_controller.confirmed and not self.state.game_over:
