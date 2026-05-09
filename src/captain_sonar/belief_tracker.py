@@ -96,7 +96,7 @@ class BeliefTracker:
         masses = self.sector_masses()
         if not masses:
             return None
-        return max(masses, key=masses.get)
+        return max(masses, key=lambda sector: masses[sector])
 
     def most_likely_cell(self) -> Tuple[int, int] | None:
         best: Tuple[int, int] | None = None

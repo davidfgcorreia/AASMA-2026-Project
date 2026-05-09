@@ -204,7 +204,7 @@ def snapshot_game_state(state: GameState, turn_id: int | None = None) -> dict[st
                     direction: sorted(symbols)
                     for direction, symbols in breakdown.crossed_by_direction.items()
                 },
-                "circuits_status": dict(breakdown.circuits_status),
+                "circuits_status": dict(getattr(breakdown, "circuits_status", {})),
             }
             for team, breakdown in state.breakdowns.items()
         },

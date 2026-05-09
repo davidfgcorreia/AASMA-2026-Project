@@ -458,7 +458,7 @@ class RadioOperator:
         masses = self.belief_tracker.sector_masses()
         if not masses:
             return 1
-        return max(masses, key=masses.get)
+        return max(masses, key=lambda s: masses[s])
 
     def suggest_torpedo_targets(self, max_count: int = 5) -> List[Tuple[int, int]]:
         """

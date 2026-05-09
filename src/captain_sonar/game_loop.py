@@ -51,7 +51,8 @@ class GameLoop:
             if not self.two_human_teams and active_team == "RED" and not self.state.game_over:
                 if self.state.skip_turns.get("RED", 0) > 0:
                     self.state.apply_actions([])
-                    self.belief.update(self.state.events)
+                    self.belief_blue.update(self.state.events)
+                    self.belief_red.update(self.state.events)
                     self.state.skip_turns["RED"] = max(0, self.state.skip_turns.get("RED", 0) - 1)
                     phase_by_team["RED"] = "move"
                     if self.state.skip_turns.get("RED", 0) > 0:
@@ -86,8 +87,10 @@ class GameLoop:
             # Auto-advance surfaced teams without waiting for input.
             if not self.state.game_over and self.state.skip_turns.get(active_team, 0) > 0:
                 self.state.apply_actions([])
-                self.belief.update(self.state.events)
-                active_controller.reset_turn()
+                self.belief_blue.update(self.state.events)
+                self.belief_red.update(self.state.events)
+                if active_controller is not None:
+                    active_controller.reset_turn()
                 self.state.skip_turns[active_team] = max(0, self.state.skip_turns.get(active_team, 0) - 1)
                 phase_by_team[active_team] = "move"
                 if self.state.skip_turns.get(active_team, 0) > 0:
@@ -137,7 +140,7 @@ class GameLoop:
             active_belief = self.belief_blue if active_team == "BLUE" else self.belief_red
             
             cursor = ui_state.get("cursor")
-            if cursor is not None:
+            if isinstance(cursor, (list, tuple)) and len(cursor) >= 2:
                 ui_state["belief_prob"] = active_belief.probability_at(cursor[0], cursor[1])
 
             ui_state["belief_heatmap"] = active_belief.heatmap()

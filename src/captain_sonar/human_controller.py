@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, cast
 
 import pygame
 
@@ -187,7 +187,7 @@ class HumanController:
         panel_x = self._map_width_px() + 12
         panel_y = WINDOW_PADDING + 32
         layout = engineer_board_geometry(panel_x, panel_y)
-        board_rect = layout["board_rect"]
+        board_rect = cast(Tuple[int, int, int, int], layout["board_rect"])
         if not point_in_rect(mouse_pos, board_rect):
             return False
 
@@ -199,7 +199,9 @@ class HumanController:
         for direction in ("W", "N", "S", "E"):
             if queued_direction is not None and direction != queued_direction:
                 continue
-            for slot_idx, (slot_x, slot_y) in enumerate(layout["rows"][direction]["buttons"]):
+            rows = cast(Dict[str, Dict[str, object]], layout["rows"])
+            buttons = cast(List[Tuple[int, int]], rows[direction]["buttons"])
+            for slot_idx, (slot_x, slot_y) in enumerate(buttons):
                 if click_on_slot(slot_x, slot_y, mouse_pos[0], mouse_pos[1]):
                     spec = engineer_button_spec(direction, slot_idx)
                     if spec is None:
