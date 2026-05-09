@@ -1,4 +1,7 @@
+from . import api
+
 __all__ = [
+	"api",
 	"config",
 	"actions",
 	"map_loader",

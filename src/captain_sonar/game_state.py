@@ -203,6 +203,16 @@ class GameState:
         """
         return self.radio_operators.get(team)
 
+    def snapshot(self, turn_id: int | None = None) -> dict[str, Any]:
+        """
+        Return a JSON-friendly snapshot of the full game state.
+
+        The snapshot is intended for logging, replay, and agent consumption.
+        """
+        from .api import snapshot_game_state
+
+        return snapshot_game_state(self, turn_id=turn_id)
+
     # =========================================================================
     # PRIVATE: INITIALIZATION
     # =========================================================================
