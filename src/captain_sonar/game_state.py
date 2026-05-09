@@ -43,7 +43,8 @@ SYSTEM_ACTION = {
     ActionType.DRONE: "drone",
     ActionType.SONAR: "sonar",
     ActionType.SILENCE: "silence",
-    ActionType.TRIGGER_MINE: "mine",
+    # TRIGGER_MINE is intentionally excluded: it bypasses gauge/breakdown/
+    # last_action_system restrictions and may be used "at any time" per the rules.
 }
 
 
@@ -77,7 +78,6 @@ class BreakdownState:
     engineer_button_spec_by_id for function_type/circuit_part behavior.
     """
     crossed_by_direction: Dict[str, set[str]] = field(default_factory=lambda: {d: set() for d in DIRECTIONS})
-    circuits_status: Dict[str, bool] = field(default_factory=dict)  # {circuit_part_circuit: auto_repaired}
 
 
 # =============================================================================
@@ -113,6 +113,7 @@ class GameState:
     
     # === Map and Navigation ===
     routes: Dict[str, set[Tuple[int, int]]] = field(default_factory=dict)
+    trajectory: Dict[str, List[Tuple[int, int]]] = field(default_factory=dict)
     mines: List[MineState] = field(default_factory=list)
     
     # === Systems (First Mate) ===
@@ -131,6 +132,7 @@ class GameState:
     def __post_init__(self) -> None:
         """Initialize game state to valid defaults."""
         self._init_routes()
+        self._init_trajectory()
         self._init_gauges()
         self._init_radio_operators()
         self._init_system_flags()
@@ -157,8 +159,7 @@ class GameState:
             return
         
         self.events.clear()
-        skip_snapshot = dict(self.skip_turns)
-        
+
         # Process each action
         for action in ordered_actions:
             if self.skip_turns.get(action.actor, 0) > 0:
@@ -168,7 +169,7 @@ class GameState:
                     "reason": "surfaced"
                 })
                 continue
-            
+
             # Validate action
             errors = validate_action(action)
             errors.extend(self._validate_state(action))
@@ -179,18 +180,10 @@ class GameState:
                     "errors": errors
                 })
                 continue
-            
+
             # Resolve valid action
             self._resolve_action(action)
-        
-        # Decrement surface skip turns
-        for team, remaining in skip_snapshot.items():
-            if remaining > 0:
-                self.skip_turns[team] = max(0, self.skip_turns.get(team, 0) - 1)
-        
-        # Update Radio Operators with new events (so they track enemy moves/sensors)
-        self._update_radio_operators()
-        
+
         self._check_game_over()
         self.turn += 1
 
@@ -219,6 +212,14 @@ class GameState:
         if not self.routes:
             self.routes = {
                 team: {(sub.x, sub.y)}
+                for team, sub in self.subs.items()
+            }
+
+    def _init_trajectory(self) -> None:
+        """Initialize ordered trajectory lists from starting positions."""
+        if not self.trajectory:
+            self.trajectory = {
+                team: [(sub.x, sub.y)]
                 for team, sub in self.subs.items()
             }
 
@@ -400,14 +401,23 @@ class GameState:
         
         nx, ny = sub.x + dx, sub.y + dy
         
-        # Check if route is blocked (forced surface)
+        # Blocked move: only surface if it is a true blackout (no valid direction
+        # remains); otherwise reject so the player can pick another direction.
         if self._route_blocked(action.actor, nx, ny):
-            self._resolve_surface(action.actor, forced=True)
+            if self._is_blackout(action.actor):
+                self._resolve_surface(action.actor, forced=True)
+            else:
+                self.events.append({
+                    "type": "action_rejected",
+                    "action": action,
+                    "errors": ["move blocked"],
+                })
             return
         
         # Move submarine
         sub.x, sub.y = nx, ny
         self.routes[action.actor].add((nx, ny))
+        self.trajectory[action.actor].append((nx, ny))
         
         # Engineer crosses out a breakdown symbol for the announced direction.
         breakdown_choice = action.payload.get("breakdown_choice")
@@ -462,15 +472,21 @@ class GameState:
         moved = 0
         for _ in range(int(steps)):
             nx, ny = sub.x + dx, sub.y + dy
-            
             if self._route_blocked(action.actor, nx, ny):
-                self._resolve_surface(action.actor, forced=True)
-                return
-            
+                break
             sub.x, sub.y = nx, ny
             self.routes[action.actor].add((nx, ny))
+            self.trajectory[action.actor].append((nx, ny))
             moved += 1
-        
+
+        if moved == 0:
+            self.events.append({
+                "type": "action_failed",
+                "reason": "silence path fully blocked",
+                "action": action,
+            })
+            return
+
         # Silence also creates a breakdown tied to the announced direction.
         breakdown_choice = action.payload.get("breakdown_choice")
         if direction is not None:
@@ -569,15 +585,24 @@ class GameState:
             })
             return
         
-        # Space must not be blocked
-        if self._route_blocked(action.actor, tx, ty):
+        # Space must be in bounds and not an island
+        if not self.map_data.in_bounds(tx, ty) or self.map_data.is_blocked(tx, ty):
             self.events.append({
                 "type": "action_failed",
                 "reason": "mine blocked",
                 "action": action
             })
             return
-        
+
+        # Cannot drop a mine on own route
+        if (tx, ty) in self.routes.get(action.actor, set()):
+            self.events.append({
+                "type": "action_failed",
+                "reason": "mine cannot be placed on own route",
+                "action": action,
+            })
+            return
+
         # No mine already there
         if any(mine.x == tx and mine.y == ty for mine in self.mines):
             self.events.append({
@@ -631,9 +656,10 @@ class GameState:
             })
             return
         
-        # Detonate mine
+        # Detonate mine. Triggering does not count as a "system" activation —
+        # it can happen at any time and does not block a subsequent system use.
         self.mines.pop(mine_index)
-        self.last_action_system[action.actor] = True
+        self.last_action_system[action.actor] = False
         self._apply_explosion((tx, ty), source="mine", owner=action.actor)
 
     # === DETECTION ===
@@ -784,6 +810,7 @@ class GameState:
         
         self.skip_turns[actor] = SURFACE_SKIP_TURNS
         self.routes[actor] = {(sub.x, sub.y)}
+        self.trajectory[actor] = [(sub.x, sub.y)]
         self.last_action_system[actor] = False
         
         self._clear_all_breakdowns(actor)
@@ -943,8 +970,6 @@ class GameState:
         repaired: List[str] = []
         for circuit_part in CIRCUIT_PARTS:
             circuit_name = f"{circuit_part}_circuit"
-            if breakdown.circuits_status.get(circuit_name, False):
-                continue
 
             part_button_ids = {
                 spec.button_id
@@ -959,7 +984,6 @@ class GameState:
             if part_button_ids.issubset(crossed_ids):
                 for crossed in breakdown.crossed_by_direction.values():
                     crossed.difference_update(part_button_ids)
-                breakdown.circuits_status[circuit_name] = True
                 repaired.append(circuit_name)
 
         return repaired
@@ -988,6 +1012,16 @@ class GameState:
                for mine in self.mines):
             return True
         return False
+
+    def _is_blackout(self, actor: str) -> bool:
+        """True only when every orthogonal neighbour is blocked (true blackout)."""
+        sub = self.subs.get(actor)
+        if not sub:
+            return False
+        for dx, dy in [(0, -1), (0, 1), (1, 0), (-1, 0)]:
+            if not self._route_blocked(actor, sub.x + dx, sub.y + dy):
+                return False
+        return True
 
     def _apply_explosion(self, impact: Tuple[int, int], source: str, owner: str) -> None:
         """
