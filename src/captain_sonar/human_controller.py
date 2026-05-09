@@ -175,9 +175,14 @@ class HumanController:
         if not self.map_data:
             return False
 
-        allowed_direction = self._current_engineer_direction()
-        if allowed_direction is None:
-            return False
+        # If a MOVE/SILENCE is already queued, only allow clicking the matching direction.
+        queued_direction: str | None = None
+        for action in self.queue:
+            if action.type in (ActionType.MOVE, ActionType.SILENCE):
+                payload_direction = action.payload.get("direction")
+                if isinstance(payload_direction, str):
+                    queued_direction = payload_direction
+                break
 
         panel_x = self._map_width_px() + 12
         panel_y = WINDOW_PADDING + 32
@@ -192,13 +197,15 @@ class HumanController:
             return dx * dx + dy * dy <= 12 * 12
 
         for direction in ("W", "N", "S", "E"):
-            if direction != allowed_direction:
+            if queued_direction is not None and direction != queued_direction:
                 continue
             for slot_idx, (slot_x, slot_y) in enumerate(layout["rows"][direction]["buttons"]):
                 if click_on_slot(slot_x, slot_y, mouse_pos[0], mouse_pos[1]):
                     spec = engineer_button_spec(direction, slot_idx)
                     if spec is None:
                         return False
+                    # When selecting directly on the board (no queued move), follow the clicked direction.
+                    self.engineer_direction = direction
                     self.engineer_index = int(slot_idx)
                     self.engineer_button_id = spec.button_id
                     self.engineer_circuit_part = spec.circuit_part

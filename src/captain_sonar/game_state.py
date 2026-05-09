@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 from .actions import Action, ActionType, validate_action
 from .config import (
@@ -21,6 +21,7 @@ from .config import (
 )
 from .engineer_layout import ENGINEER_BUTTON_SPECS, engineer_button_spec_by_id
 from .map_loader import MapData
+from .radio_operator import RadioOperator
 
 # =============================================================================
 # MODULE CONSTANTS
@@ -97,6 +98,7 @@ class GameState:
     - Coordinate action resolution
     - Track breakdowns (Engineer role)
     - Manage game flow (turns, surfacing, game over)
+    - Maintain Radio Operator tracking of enemy position
     """
     map_data: MapData
     subs: Dict[str, SubmarineState]
@@ -123,12 +125,16 @@ class GameState:
     
     # === Surface State ===
     skip_turns: Dict[str, int] = field(default_factory=dict)
+    
+    # === Radio Operator (Enemy Tracking) ===
+    radio_operators: Dict[str, RadioOperator] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Initialize game state to valid defaults."""
         self._init_routes()
         self._init_trajectory()
         self._init_gauges()
+        self._init_radio_operators()
         self._init_system_flags()
         self._init_surface_state()
         self._init_breakdowns()
@@ -145,8 +151,9 @@ class GameState:
         1. Validate action syntax and game state
         2. Resolve valid actions
         3. Update game state (damage, gauges, etc.)
-        4. Check for game over
-        5. Increment turn
+        4. Update Radio Operators with new events
+        5. Check for game over
+        6. Increment turn
         """
         if self.game_over:
             return
@@ -184,6 +191,18 @@ class GameState:
         """Check if a system's gauge is fully charged (ready to activate)."""
         return self.gauges.get(team, {}).get(system, 0) >= GAUGE_MAX_DEFAULT
 
+    def get_radio_operator(self, team: str) -> RadioOperator | None:
+        """
+        Get the Radio Operator for a team (tracks enemy position).
+        
+        Args:
+            team: Team identifier
+        
+        Returns:
+            RadioOperator instance or None
+        """
+        return self.radio_operators.get(team)
+
     # =========================================================================
     # PRIVATE: INITIALIZATION
     # =========================================================================
@@ -216,6 +235,14 @@ class GameState:
         """Initialize last_action_system tracking (prevents two systems in a row)."""
         if not self.last_action_system:
             self.last_action_system = {team: False for team in self.subs.keys()}
+
+    def _init_radio_operators(self) -> None:
+        """Initialize Radio Operator for each team (tracks enemy position)."""
+        if not self.radio_operators:
+            self.radio_operators = {
+                team: RadioOperator(self.map_data, own_team=team)
+                for team in self.subs.keys()
+            }
 
     def _init_surface_state(self) -> None:
         """Initialize surface skip turns (0 = not surfaced)."""
@@ -280,8 +307,10 @@ class GameState:
                     errors.append(f"{system} system not ready")
 
             # Must not be broken by engineer breakdowns.
-            if self._system_has_breakdown(action.actor, system):
-                errors.append(f"{system} system has breakdown")
+            # Triggering a mine is allowed even if the mine system is broken.
+            if action.type != ActionType.TRIGGER_MINE:
+                if self._system_has_breakdown(action.actor, system):
+                    errors.append(f"{system} system has breakdown")
 
             # Can't activate two systems in a row
             if self.last_action_system.get(action.actor, False):
@@ -405,6 +434,7 @@ class GameState:
         self.events.append({
             "type": "move",
             "actor": action.actor,
+            "direction": direction,
             "to": (nx, ny),
             "charge": charge
         })
@@ -475,6 +505,7 @@ class GameState:
         self.events.append({
             "type": "silence",
             "actor": action.actor,
+            "direction": direction,
             "steps": moved,
             "to": (sub.x, sub.y),
             "charge": charge,
@@ -1062,6 +1093,19 @@ class GameState:
     def _row_label(self, y: int) -> str:
         """Convert y coordinate to row letter (A, B, C, ...)."""
         return chr(ord("A") + y)
+
+    def _update_radio_operators(self) -> None:
+        """
+        Update each team's Radio Operator with events.
+        
+        This allows the Radio Operator to track:
+        - Enemy moves and position updates
+        - Sensor information (drone, sonar, surface announcements)
+        - Constraint satisfaction (route tracking)
+        """
+        for team, radio_op in self.radio_operators.items():
+            if radio_op is not None:
+                radio_op.update_from_events(self.events)
 
     def _check_game_over(self) -> None:
         """Check if any submarine is destroyed (4 damage)."""
