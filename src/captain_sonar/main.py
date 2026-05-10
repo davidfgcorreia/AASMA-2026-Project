@@ -6,6 +6,8 @@ import random
 
 import pygame
 
+from agents.manager import TeamAgentManager
+
 from .config import (
     MAP_BACKGROUND_PATH,
     MAP_MARGIN_X,
@@ -21,7 +23,7 @@ from .game_loop import GameLoop
 from .game_state import GameState
 from .map_loader import load_map
 from .renderer import Renderer
-from .startup import choose_start_positions
+from .startup import choose_start_positions, load_team_play_types
 
 
 def parse_args() -> argparse.Namespace:
@@ -29,8 +31,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--map", default="assets/maps/default_map.json")
     parser.add_argument("--log", default="logs/game_log.jsonl")
     parser.add_argument("--seed", type=int, default=1337)
-    parser.add_argument("--two-human", action="store_true", default=True, help="Enable two human teams (default)")
-    parser.add_argument("--ai-red", action="store_true", help="Use AI for RED team instead")
+    parser.add_argument(
+        "--play-types",
+        default="assets/team_play_types.json",
+        help="JSON file describing per-team play types (human/agent)",
+    )
     parser.add_argument(
         "--start",
         choices=("default", "swap", "interactive"),
@@ -52,14 +57,41 @@ def main() -> None:
     surface = pygame.display.set_mode((width, height))
     pygame.display.set_caption("Captain Sonar Prototype")
     renderer = Renderer(surface, map_data, background_path=MAP_BACKGROUND_PATH)
-    subs = choose_start_positions(map_data, args.start, surface, renderer)
+    team_play_types = load_team_play_types(args.play_types)
+    agent_managers = {
+        team: TeamAgentManager(team)
+        for team, play_type in team_play_types.items()
+        if play_type == "agent"
+    }
+
+    def agent_team_picker(team: str, map_data, confirmed):
+        manager = agent_managers.get(team)
+        if manager is None:
+            return None
+        return manager.choose_start_position(map_data, confirmed)
+
+    subs = choose_start_positions(
+        map_data,
+        args.start,
+        surface,
+        renderer,
+        team_picker=agent_team_picker,
+        play_types_path=args.play_types,
+    )
     state = GameState(map_data=map_data, subs=subs)
     log_dir = os.path.dirname(args.log)
     if log_dir:
         os.makedirs(log_dir, exist_ok=True)
     logger = EventLogger(args.log)
-    two_human_teams = not args.ai_red
-    loop = GameLoop(state, renderer, logger, seed=args.seed, map_name=args.map, two_human_teams=two_human_teams)
+    loop = GameLoop(
+        state,
+        renderer,
+        logger,
+        seed=args.seed,
+        map_name=args.map,
+        team_play_types=team_play_types,
+        agent_managers=agent_managers,
+    )
     loop.run()
 
 

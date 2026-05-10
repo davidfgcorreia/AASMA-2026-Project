@@ -8,12 +8,17 @@ import pygame
 
 
 def test_move_blocked():
-    map_data = MapData(width=2, height=2, tiles=[["#", "."], [".", "."]])
-    state = GameState(map_data=map_data, subs={"BLUE": SubmarineState(x=0, y=0)})
-    action = Action(actor="BLUE", type=ActionType.MOVE, payload={"direction": "E"})
+    map_data = MapData(width=3, height=2, tiles=[[".", ".", "."], [".", ".", "."]])
+    state = GameState(map_data=map_data, subs={"BLUE": SubmarineState(x=1, y=0)})
+    state.apply_actions([Action(actor="BLUE", type=ActionType.MOVE, payload={"direction": "S"})])
+
+    action = Action(actor="BLUE", type=ActionType.MOVE, payload={"direction": "N"})
     state.apply_actions([action])
-    assert state.subs["BLUE"].x == 0
-    assert state.skip_turns["BLUE"] == SURFACE_SKIP_TURNS
+
+    assert state.subs["BLUE"].x == 1
+    assert state.subs["BLUE"].y == 1
+    assert state.skip_turns["BLUE"] == 0
+    assert any(e["type"] == "action_rejected" for e in state.events)
 
 
 def test_torpedo_out_of_range_does_not_consume():

@@ -15,6 +15,7 @@ from .config import (
     SECTOR_COLS,
     SECTOR_ROWS,
     TILE_SIZE,
+    TORPEDO_RANGE,
     WINDOW_PADDING,
 )
 from .engineer_layout import engineer_board_geometry, engineer_button_spec, point_in_rect
@@ -38,6 +39,7 @@ class HumanController:
     engineer_function_type: str = "radioactive"
     _last_mouse_pos: Tuple[int, int] = (0, 0)
     map_data: Optional[MapData] = None
+    game_state: Optional[object] = None
 
     def reset_turn(self) -> None:
         self.queue.clear()
@@ -49,8 +51,9 @@ class HumanController:
         self.engineer_circuit_part = "not"
         self.engineer_function_type = "radioactive"
 
-    def handle_event(self, event: pygame.event.Event, map_data: MapData) -> bool:
+    def handle_event(self, event: pygame.event.Event, map_data: MapData, game_state: object | None = None) -> bool:
         self.map_data = map_data
+        self.game_state = game_state
         if event.type == pygame.KEYDOWN:
             return self._handle_key(event.key)
         if event.type == pygame.MOUSEMOTION:
@@ -223,6 +226,14 @@ class HumanController:
             self.active_action = None
             return True
         self.active_action = ActionType.MOVE
+        if not self._is_direction_valid(direction):
+            # Direction is invalid (blocked or out of route); check if all blocked
+            if self._all_directions_blocked():
+                # Auto-surface as only option
+                self._queue_surface()
+                self.active_action = None
+            # Else silently reject the invalid move
+            return True
         self._queue_move(direction)
         return True
 
@@ -271,10 +282,59 @@ class HumanController:
             )
         )
 
+    def _is_direction_valid(self, direction: str) -> bool:
+        """Check if a movement in the given direction is legal."""
+        if not self.game_state or not self.map_data:
+            return True
+        
+        sub = getattr(self.game_state, 'subs', {}).get(self.team)
+        if not sub:
+            return False
+        
+        # Calculate target position
+        dx, dy = {"N": (0, -1), "S": (0, 1), "E": (1, 0), "W": (-1, 0)}.get(direction, (0, 0))
+        nx, ny = sub.x + dx, sub.y + dy
+        
+        # Check bounds
+        if not self.map_data.in_bounds(nx, ny):
+            return False
+        
+        # Check blocked (island)
+        if self.map_data.is_blocked(nx, ny):
+            return False
+        
+        # Check own route
+        routes = getattr(self.game_state, 'routes', {})
+        if (nx, ny) in routes.get(self.team, set()):
+            return False
+        
+        return True
+
+    def _all_directions_blocked(self) -> bool:
+        """Check if all four directions are blocked."""
+        for direction in ("N", "S", "E", "W"):
+            if self._is_direction_valid(direction):
+                return False
+        return True
+
     def _queue_torpedo(self) -> None:
         if len(self.queue) >= MAX_ACTIONS_PER_TURN:
             return
         x, y = self.cursor
+        # Pre-validate target for better UX: ensure in-bounds and in-range
+        if not self.map_data or not self.game_state:
+            return
+        sub = getattr(self.game_state, 'subs', {}).get(self.team)
+        if not sub:
+            return
+        if not self.map_data.in_bounds(x, y):
+            return
+        # Must be orthogonal and within range
+        if not (sub.x == x or sub.y == y):
+            return
+        distance = abs(sub.x - x) + abs(sub.y - y)
+        if distance < 1 or distance > TORPEDO_RANGE:
+            return
         self.queue.append(
             Action(actor=self.team, type=ActionType.TORPEDO, payload={"target": {"x": x, "y": y}})
         )
@@ -296,12 +356,39 @@ class HumanController:
         if len(self.queue) >= MAX_ACTIONS_PER_TURN:
             return
         x, y = self.cursor
+        # Validate mine placement against map and game state
+        if not self.map_data or not self.game_state:
+            return
+        sub = getattr(self.game_state, 'subs', {}).get(self.team)
+        if not sub:
+            return
+        # Adjacent?
+        if abs(sub.x - x) + abs(sub.y - y) != 1:
+            return
+        # In bounds and not island
+        if not self.map_data.in_bounds(x, y) or self.map_data.is_blocked(x, y):
+            return
+        # Not on own route
+        routes = getattr(self.game_state, 'routes', {})
+        if (x, y) in routes.get(self.team, set()):
+            return
+        # No existing mine owned by self
+        mines = getattr(self.game_state, 'mines', [])
+        if any(mine.owner == self.team and mine.x == x and mine.y == y for mine in mines):
+            return
+
         self.queue.append(Action(actor=self.team, type=ActionType.MINE, payload={"target": {"x": x, "y": y}}))
 
     def _queue_trigger_mine(self) -> None:
         if len(self.queue) >= MAX_ACTIONS_PER_TURN:
             return
         x, y = self.cursor
+        # Validate there is an owned mine to trigger
+        if not self.map_data or not self.game_state:
+            return
+        mines = getattr(self.game_state, 'mines', [])
+        if not any(mine.owner == self.team and mine.x == x and mine.y == y for mine in mines):
+            return
         self.queue.append(
             Action(actor=self.team, type=ActionType.TRIGGER_MINE, payload={"target": {"x": x, "y": y}})
         )

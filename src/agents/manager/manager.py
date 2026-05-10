@@ -3,13 +3,18 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Iterable, Mapping
+from typing import Any, Callable, Iterable, Mapping, Tuple
 
 from captain_sonar.api import get_team_view
 from captain_sonar.game_state import GameState
+from captain_sonar.map_loader import MapData
 
 from ..base import AgentBase, AgentRole
 from ..common.functions import action_signature, write_turn_actions
+
+
+GridPos = Tuple[int, int]
+StartPositionPicker = Callable[[str, MapData, Mapping[str, Any]], GridPos | None]
 
 
 @dataclass(slots=True)
@@ -53,6 +58,7 @@ class TeamAgentManager:
         self._activation_until_actions_chosen: bool = False
         self._turn_action_proposals: dict[AgentRole, dict[str, Any]] = {}
         self._turn_action_votes: dict[str, set[AgentRole]] = {}
+        self._start_position_picker: StartPositionPicker | None = None
 
     @property
     def agents(self) -> Mapping[AgentRole, AgentBase]:
@@ -74,6 +80,21 @@ class TeamAgentManager:
 
     def activate_all_registered(self) -> None:
         self._active_roles = set(self._agents)
+
+    def set_start_position_picker(self, picker: StartPositionPicker | None) -> None:
+        self._start_position_picker = picker
+
+    def choose_start_position(
+        self,
+        map_data: MapData,
+        confirmed: Mapping[str, Any],
+    ) -> GridPos | None:
+        """Choose a legal start tile for this team through the configured picker."""
+        if self._start_position_picker is not None:
+            return self._start_position_picker(self.team, map_data, confirmed)
+
+        default = self._default_start_position(map_data, confirmed)
+        return default
 
     def activate_agents(
         self,
@@ -319,6 +340,26 @@ class TeamAgentManager:
 
     def _now_ms(self) -> int:
         return int(time.monotonic() * 1000)
+
+    def _default_start_position(self, map_data: MapData, confirmed: Mapping[str, Any]) -> GridPos | None:
+        preferred = (1, 1) if self.team == "BLUE" else (max(0, map_data.width - 2), max(0, map_data.height - 2))
+        if self._is_legal_start_tile(map_data, preferred, confirmed):
+            return preferred
+
+        for y in range(map_data.height):
+            for x in range(map_data.width):
+                candidate = (x, y)
+                if self._is_legal_start_tile(map_data, candidate, confirmed):
+                    return candidate
+        return None
+
+    def _is_legal_start_tile(self, map_data: MapData, candidate: GridPos, confirmed: Mapping[str, Any]) -> bool:
+        x, y = candidate
+        if not map_data.in_bounds(x, y):
+            return False
+        if map_data.is_blocked(x, y):
+            return False
+        return all(getattr(sub, "x", None) != x or getattr(sub, "y", None) != y for sub in confirmed.values())
 
     def _write_turn_actions_ledger(
         self,

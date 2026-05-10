@@ -1,18 +1,21 @@
 from __future__ import annotations
 
-import random
-from typing import List
+from typing import List, Mapping
 
 import pygame
+from agents.manager import TeamAgentManager
 
 from .actions import Action, ActionType, order_actions
-from .ai_placeholders import choose_actions
 from .config import DEFAULT_SEED, FPS
 from .event_log import EventLogger
 from .game_state import GameState
 from .human_controller import HumanController
 from .renderer import Renderer
 from .belief_tracker import BeliefTracker
+
+
+TEAM_HUMAN = "human"
+TEAM_AGENT = "agent"
 
 
 class GameLoop:
@@ -23,16 +26,26 @@ class GameLoop:
         logger: EventLogger | None = None,
         seed: int = DEFAULT_SEED,
         map_name: str = "unknown",
-        two_human_teams: bool = True,
+        team_play_types: Mapping[str, str] | None = None,
+        agent_managers: Mapping[str, TeamAgentManager] | None = None,
     ) -> None:
         self.state = state
         self.renderer = renderer
         self.logger = logger
         self.clock = pygame.time.Clock()
-        self.human_blue = HumanController(team="BLUE")
-        self.human_red = HumanController(team="RED") if two_human_teams else None
-        self.two_human_teams = two_human_teams
-        self.rng = random.Random(seed)
+        normalized_play_types = {
+            "BLUE": TEAM_HUMAN,
+            "RED": TEAM_HUMAN,
+        }
+        if team_play_types:
+            for team in ("BLUE", "RED"):
+                value = team_play_types.get(team, TEAM_HUMAN)
+                normalized_play_types[team] = str(value).strip().lower()
+
+        self.team_play_types = normalized_play_types
+        self.agent_managers = dict(agent_managers or {})
+        self.human_blue = HumanController(team="BLUE") if not self._is_agent_team("BLUE") else None
+        self.human_red = HumanController(team="RED") if not self._is_agent_team("RED") else None
         # Two separate belief trackers: one for each team's belief about opponent
         self.belief_blue = BeliefTracker(state.map_data, own_team="BLUE")  # Blue's belief about Red
         self.belief_red = BeliefTracker(state.map_data, own_team="RED")    # Red's belief about Blue
@@ -48,38 +61,38 @@ class GameLoop:
             active_controller = self.human_blue if active_team == "BLUE" else self.human_red
             active_phase = phase_by_team.get(active_team, "move")
 
-            if not self.two_human_teams and active_team == "RED" and not self.state.game_over:
-                if self.state.skip_turns.get("RED", 0) > 0:
+            if self._is_agent_team(active_team) and not self.state.game_over:
+                if self.state.skip_turns.get(active_team, 0) > 0:
                     self.state.apply_actions([])
                     self.belief_blue.update(self.state.events)
                     self.belief_red.update(self.state.events)
-                    self.state.skip_turns["RED"] = max(0, self.state.skip_turns.get("RED", 0) - 1)
-                    phase_by_team["RED"] = "move"
-                    if self.state.skip_turns.get("RED", 0) > 0:
-                        active_team = "BLUE"
+                    self.state.skip_turns[active_team] = max(0, self.state.skip_turns.get(active_team, 0) - 1)
+                    phase_by_team[active_team] = "move"
+                    if self.state.skip_turns.get(active_team, 0) > 0:
+                        active_team = "RED" if active_team == "BLUE" else "BLUE"
                     continue
-                actions = order_actions(choose_actions("RED", self.rng, self.state, active_phase))
+                actions = order_actions(self._choose_agent_actions(active_team, active_phase))
                 self.state.apply_actions(actions)
                 self.belief_blue.update(self.state.events)
                 self.belief_red.update(self.state.events)
                 if self.logger:
                     self.logger.log_turn(self.state.turn, actions, self.state.events)
                 if active_phase == "move":
-                    if self._team_just_surfaced("RED"):
-                        phase_by_team["RED"] = "move"
-                        active_team = "BLUE"
+                    if self._team_just_surfaced(active_team):
+                        phase_by_team[active_team] = "move"
+                        active_team = "RED" if active_team == "BLUE" else "BLUE"
                     else:
-                        phase_by_team["RED"] = "system"
+                        phase_by_team[active_team] = "system"
                 else:
-                    phase_by_team["RED"] = "move"
-                    active_team = "BLUE"
+                    phase_by_team[active_team] = "move"
+                    active_team = "RED" if active_team == "BLUE" else "BLUE"
                 continue
             
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
                 elif active_controller:
-                    active_controller.handle_event(event, self.state.map_data)
+                    active_controller.handle_event(event, self.state.map_data, self.state)
             
             if active_controller:
                 active_controller.update_cursor(pygame.mouse.get_pos(), self.state.map_data)
@@ -150,6 +163,61 @@ class GameLoop:
             self.renderer.draw(self.state, ui_state)
             pygame.display.flip()
             self.clock.tick(FPS)
+
+    def _is_agent_team(self, team: str) -> bool:
+        return self.team_play_types.get(team, TEAM_HUMAN) == TEAM_AGENT
+
+    def _choose_agent_actions(self, team: str, phase: str) -> list[Action]:
+        manager = self.agent_managers.get(team)
+        if manager is None:
+            return []
+
+        manager.observe(self.state)
+        try:
+            raw_actions = manager.collect_actions(deadline_ms=0)
+        except NotImplementedError:
+            return []
+
+        allowed = (
+            {ActionType.MOVE, ActionType.SILENCE, ActionType.SURFACE}
+            if phase == "move"
+            else {
+                ActionType.TORPEDO,
+                ActionType.SONAR,
+                ActionType.DRONE,
+                ActionType.MINE,
+                ActionType.TRIGGER_MINE,
+                ActionType.REPAIR,
+            }
+        )
+
+        for proposal in raw_actions.values():
+            candidate = proposal
+            if isinstance(proposal, dict):
+                full_action = proposal.get("full_action")
+                if isinstance(full_action, dict):
+                    candidate = full_action
+            action = self._to_action(team, candidate)
+            if action is not None and action.type in allowed:
+                return [action]
+        return []
+
+    def _to_action(self, default_team: str, payload: object) -> Action | None:
+        if not isinstance(payload, dict):
+            return None
+        raw_type = payload.get("type")
+        if not isinstance(raw_type, str):
+            return None
+        try:
+            action_type = ActionType[raw_type.strip().upper()]
+        except KeyError:
+            return None
+        raw_payload = payload.get("payload")
+        normalized_payload = raw_payload if isinstance(raw_payload, dict) else {}
+        actor = payload.get("actor", default_team)
+        if not isinstance(actor, str):
+            actor = default_team
+        return Action(actor=actor, type=action_type, payload=normalized_payload)
 
     def _team_just_surfaced(self, team: str) -> bool:
         return any(e.get("type") == "surface" and e.get("actor") == team for e in self.state.events)

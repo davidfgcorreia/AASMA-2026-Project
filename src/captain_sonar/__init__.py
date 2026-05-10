@@ -9,7 +9,6 @@ __all__ = [
 	"event_log",
 	"renderer",
 	"human_controller",
-	"ai_placeholders",
 	"game_loop",
 	"belief_tracker",
 	"radio_operator",

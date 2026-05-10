@@ -64,3 +64,25 @@ def test_manager_enforces_message_limits() -> None:
     assert first is True
     assert second is False
     assert len(manager.read_inbox(AgentRole.FIRST_MATE)) == 1
+
+
+def test_manager_can_choose_start_position_through_callback() -> None:
+    manager = TeamAgentManager("RED")
+    seen: dict[str, object] = {}
+
+    def picker(team: str, map_data: MapData, confirmed: dict[str, SubmarineState]):
+        seen["team"] = team
+        seen["width"] = map_data.width
+        seen["confirmed"] = dict(confirmed)
+        return (3, 1)
+
+    manager.set_start_position_picker(picker)
+    map_data = MapData(width=5, height=4, tiles=[["."] * 5 for _ in range(4)])
+    confirmed = {"BLUE": SubmarineState(x=1, y=1)}
+
+    position = manager.choose_start_position(map_data, confirmed)
+
+    assert position == (3, 1)
+    assert seen["team"] == "RED"
+    assert seen["width"] == 5
+    assert seen["confirmed"]["BLUE"].x == 1
