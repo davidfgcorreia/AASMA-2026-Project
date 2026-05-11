@@ -20,8 +20,8 @@ DAMAGE_INDIRECT = 1
 MAX_SILENCE_STEPS = 4
 SURFACE_SKIP_TURNS = 3
 GAUGE_MAX_DEFAULT = 4
-SECTOR_ROWS = 2
-SECTOR_COLS = 2
+SECTOR_ROWS = 3
+SECTOR_COLS = 3
 
 # ============================================================================
 # ENGINEER ROLE CONFIGURATION

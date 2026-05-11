@@ -55,6 +55,6 @@ def test_sector_masses_and_most_likely_helpers():
 
     masses = tracker.sector_masses()
     assert abs(sum(masses.values()) - 1.0) < 1e-9
-    # With SECTOR_ROWS=2 and SECTOR_COLS=2 (config), bottom-right is sector 4.
-    assert tracker.most_likely_sector() == 4
+    # With SECTOR_ROWS=3 and SECTOR_COLS=3 (config), bottom-right corner is sector 9.
+    assert tracker.most_likely_sector() == 9
     assert tracker.most_likely_cell() == (3, 3)

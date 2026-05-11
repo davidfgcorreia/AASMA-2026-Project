@@ -7,7 +7,7 @@ This file stores the current turn activation window, action proposals, and the f
 - turn_id: 0
 - status: resolved
 - active_roles: ['captain', 'engineer', 'first_mate']
-- activation_deadline_ms: 20347481
+- activation_deadline_ms: 6547158
 - action_window: open
 
 ## Proposals

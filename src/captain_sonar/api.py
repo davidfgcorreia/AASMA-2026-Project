@@ -246,3 +246,18 @@ def _freeze_point(point: tuple[int, int] | None) -> dict[str, int] | None:
         return None
     x, y = point
     return {"x": x, "y": y}
+
+
+def get_sonar_response_options(state: GameState, team: str) -> dict[str, list[int]]:
+    """
+    Get available false information options for a sonar response.
+    Used by agents to understand what choices are available.
+    
+    Args:
+        state: The game state
+        team: The defending team (responder)
+    
+    Returns:
+        Dict with keys row/col/sector containing possible false values
+    """
+    return _freeze(state.get_sonar_response_options(team))

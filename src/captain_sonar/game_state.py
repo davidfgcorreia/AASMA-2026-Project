@@ -713,16 +713,27 @@ class GameState:
 
     def _resolve_sonar(self, action: Action) -> None:
         """
-        First Mate or Captain activates sonar.
-        1. Get enemy submarine's actual position (row, col, sector)
-        2. Generate one true piece of info
-        3. Generate one false piece of different type
-        4. Return both (mixed)
+        Sonar activation: attacker queries opponent's position.
+        
+        Per official rules, the defending captain announces TWO pieces of information,
+        one true and one false, each a different type (row/col/sector). The attacking
+        team does NOT know which is true and which is false.
+        
+        Flow:
+        1. Attacker specifies which information type they want (row/col/sector) via true_type
+        2. Defender chooses false_type and false_value in response
+        3. Generate one true piece + one false piece (different types)
+        4. Randomize order so attacker can't tell which is which
         5. Consume gauge
         6. Set last_action_system to True
         
-        Sonar reveals one true + one false piece of different type info.
+        Args in action.payload:
+        - true_type: str (row/col/sector) - what attacker wants (default: rotate by turn)
+        - false_type: str (row/col/sector) - what defender chooses (default: first available)
+        - false_value: int/str - false value chosen by defender (default: generated)
         """
+        import random
+        
         enemy = self._enemy_of(action.actor)
         if not enemy:
             return
@@ -731,50 +742,57 @@ class GameState:
         if not enemy_sub:
             return
         
-        # True information
+        # Get or default true_type (requested by attacker)
+        true_type = action.payload.get("true_type")
+        if not isinstance(true_type, str) or true_type not in ("row", "col", "sector"):
+            # Default: rotate by turn
+            types = ["row", "col", "sector"]
+            true_type = types[self.turn % 3]
+        
+        # Get actual position values
         true_row = self._row_label(enemy_sub.y)
         true_col = enemy_sub.x + 1
         true_sector = self._sector_for(enemy_sub.x, enemy_sub.y)
         
-        # False information (rotated)
-        false_row = self._row_label((enemy_sub.y + 1) % self.map_data.height)
-        false_col = ((enemy_sub.x + 1) % self.map_data.width) + 1
-        false_sector = (true_sector % (SECTOR_ROWS * SECTOR_COLS)) + 1
+        # Build true piece based on selected type
+        true_value_map = {"row": true_row, "col": true_col, "sector": true_sector}
+        true_value = true_value_map[true_type]
         
-        pieces = [
-            ("row", true_row, False),
-            ("col", true_col, False),
-            ("sector", true_sector, False),
-        ]
+        # Possible false types (anything except true_type)
+        false_types = [t for t in ("row", "col", "sector") if t != true_type]
         
-        false_pieces = [
-            ("row", false_row, True),
-            ("col", false_col, True),
-            ("sector", false_sector, True),
-        ]
+        # Get defender's choice of false_type and false_value
+        false_type = action.payload.get("false_type")
+        if not isinstance(false_type, str) or false_type not in false_types:
+            false_type = false_types[0]  # Default to first available
         
-        # Alternate which true piece is revealed
-        index = self.turn % 3
-        true_piece = pieces[index]
-        false_piece = next(
-            item for item in false_pieces
-            if item[0] != true_piece[0]
-        )
+        false_value = action.payload.get("false_value")
+        if false_value is None:
+            # Generate default false value
+            false_row = self._row_label((enemy_sub.y + 1) % self.map_data.height)
+            false_col = ((enemy_sub.x + 1) % self.map_data.width) + 1
+            false_sector = (true_sector % (SECTOR_ROWS * SECTOR_COLS)) + 1
+            false_value_map = {"row": false_row, "col": false_col, "sector": false_sector}
+            false_value = false_value_map[false_type]
         
         self._consume_gauge(action.actor, "sonar")
         self.last_action_system[action.actor] = True
         
+        # Per official rules: randomize order of true/false pieces so attacker doesn't know which is which
+        true_piece = {"type": true_type, "value": true_value}
+        false_piece = {"type": false_type, "value": false_value}
+        
+        pieces = [true_piece, false_piece]
+        random.shuffle(pieces)
+        
         self.events.append({
             "type": "sonar",
             "actor": action.actor,
-            "true_info": {
-                "type": true_piece[0],
-                "value": true_piece[1]
-            },
-            "false_info": {
-                "type": false_piece[0],
-                "value": false_piece[1]
-            },
+            "info_1": pieces[0],  # Unknown if true or false
+            "info_2": pieces[1],  # Unknown if true or false
+            # Store internal truth for validation/logging purposes only
+            "_true_info": true_piece,
+            "_false_info": false_piece,
         })
 
     # === REPAIR (ENGINEER) ===
@@ -1099,6 +1117,36 @@ class GameState:
             (x * SECTOR_COLS) // self.map_data.width
         )
         return row * SECTOR_COLS + col + 1
+
+    def get_sonar_response_options(self, defending_team: str) -> dict[str, list]:
+        """
+        Get available false information options for a sonar response.
+        
+        Returns options for each possible false_type (those different from true_type).
+        Used by UI menu and agents to select sonar response.
+        
+        Args:
+            defending_team: The team choosing the false information
+        
+        Returns:
+            dict with keys row/col/sector containing possible values
+        """
+        sub = self.subs.get(defending_team)
+        if not sub:
+            return {}
+        
+        options = {}
+        
+        # Generate possible false values for each type
+        false_row = self._row_label((sub.y + 1) % self.map_data.height)
+        false_col = ((sub.x + 1) % self.map_data.width) + 1
+        false_sector = (self._sector_for(sub.x, sub.y) % (SECTOR_ROWS * SECTOR_COLS)) + 1
+        
+        options["row"] = [false_row]  # Can choose other rows if needed
+        options["col"] = [false_col]  # Can choose other columns if needed
+        options["sector"] = [false_sector]  # Can choose other sectors if needed
+        
+        return options
 
     def _row_label(self, y: int) -> str:
         """Convert y coordinate to row letter (A, B, C, ...)."""

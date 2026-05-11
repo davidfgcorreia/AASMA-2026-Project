@@ -51,7 +51,7 @@ class Renderer:
         if self.grid_overlay:
             surface.blit(self.grid_overlay, (MAP_MARGIN_X, MAP_MARGIN_Y))
         self._draw_belief_heatmap_on(surface, ui_state)
-        self._draw_mines_on(surface, state)
+        self._draw_mines_on(surface, state, ui_state)
         self._draw_trajectories_on(surface, state, ui_state)
         self._draw_subs_on(surface, state, ui_state)
         self._draw_cursor_on(surface, ui_state)
@@ -179,9 +179,12 @@ class Renderer:
             )
             pygame.draw.circle(surface, colors.get(team, (200, 200, 200)), center, TILE_SIZE // 3)
 
-    def _draw_mines_on(self, surface: pygame.Surface, state) -> None:
+    def _draw_mines_on(self, surface: pygame.Surface, state, ui_state) -> None:
+        active_team = str(ui_state.get("active_team", "BLUE"))
         origin_x, origin_y = MAP_MARGIN_X, MAP_MARGIN_Y
         for mine in state.mines:
+            if getattr(mine, "owner", None) != active_team:
+                continue
             rect = pygame.Rect(
                 origin_x + mine.x * TILE_SIZE + TILE_SIZE // 4,
                 origin_y + mine.y * TILE_SIZE + TILE_SIZE // 4,
@@ -237,7 +240,7 @@ class Renderer:
             y_offset = self._draw_submarines_status(panel_x + 12, y_offset, state, ui_state)
             y_offset = self._draw_radio_belief(panel_x + 12, y_offset, ui_state)
             y_offset = self._draw_systems_gauges(panel_x + 12, y_offset, state, ui_state)
-            y_offset = self._draw_mines_status(panel_x + 12, y_offset, state)
+            y_offset = self._draw_mines_status(panel_x + 12, y_offset, state, ui_state)
             y_offset = self._draw_surface_status(panel_x + 12, y_offset, state)
             y_offset = self._draw_queue(panel_x + 12, y_offset, ui_state)
         self._draw_controls_hints(panel_x + 12, y_offset, ui_state)
@@ -565,21 +568,17 @@ class Renderer:
         
         return y + 4
 
-    def _draw_mines_status(self, x: int, y: int, state) -> int:
+    def _draw_mines_status(self, x: int, y: int, state, ui_state) -> int:
         """Display deployed mines information."""
+        active_team = str(ui_state.get("active_team", "BLUE"))
         header = self.font.render("MINES:", True, (200, 180, 100))
         self.surface.blit(header, (x, y))
         y += 20
         
-        blue_mines = [m for m in state.mines if m.owner == "BLUE"]
-        red_mines = [m for m in state.mines if m.owner == "RED"]
-        
-        blue_mines_text = self.font.render(f"BLUE: {len(blue_mines)} deployed", True, (100, 200, 255))
-        self.surface.blit(blue_mines_text, (x, y))
-        y += 16
-        
-        red_mines_text = self.font.render(f"RED: {len(red_mines)} deployed", True, (255, 150, 150))
-        self.surface.blit(red_mines_text, (x, y))
+        team_mines = [m for m in state.mines if getattr(m, "owner", None) == active_team]
+        team_color = (100, 200, 255) if active_team == "BLUE" else (255, 150, 150)
+        team_mines_text = self.font.render(f"{active_team}: {len(team_mines)} deployed", True, team_color)
+        self.surface.blit(team_mines_text, (x, y))
         y += 16
         
         return y + 8
@@ -679,3 +678,139 @@ class Renderer:
         if image.get_size() != target_size:
             image = pygame.transform.smoothscale(image, target_size)
         self.engineer_background = image
+
+    def draw_sonar_response_menu(
+        self,
+        defending_team: str,
+        true_type: str | None,
+        false_type: str | None,
+        false_value: int | str | None,
+        state,
+        input_step: str,
+        input_buffer: str,
+    ) -> None:
+        """Draw sonar response menu popup."""
+        # Menu dimensions
+        menu_width = 550
+        menu_height = 420
+        menu_x = (self.surface.get_width() - menu_width) // 2
+        menu_y = (self.surface.get_height() - menu_height) // 2
+        
+        # Draw semi-transparent overlay
+        overlay = pygame.Surface((self.surface.get_width(), self.surface.get_height()))
+        overlay.set_alpha(150)
+        overlay.fill((0, 0, 0))
+        self.surface.blit(overlay, (0, 0))
+        
+        # Draw menu box
+        menu_rect = pygame.Rect(menu_x, menu_y, menu_width, menu_height)
+        pygame.draw.rect(self.surface, (40, 40, 60), menu_rect)
+        pygame.draw.rect(self.surface, (200, 200, 200), menu_rect, 3)
+        
+        # Title with attacking team name
+        attacking_team = "BLUE" if defending_team == "RED" else "RED"
+        title_text = f"RESPOND TO {attacking_team}'s SONAR"
+        title_surf = self.font.render(title_text, True, (255, 200, 100))
+        self.surface.blit(title_surf, (menu_x + 20, menu_y + 20))
+        
+        # Instructions
+        if input_step == "true_type":
+            instruction = "Press 1 for ROW, 2 for COL, 3 for SECTOR"
+        elif input_step == "false_type":
+            instruction = "Choose the FALSE type with 1, 2, or 3"
+        else:
+            if false_type == "row":
+                instruction = "Type a letter A-O for the FALSE row, then press Enter"
+            elif false_type == "col":
+                instruction = "Type a column number 1-15, then press Enter"
+            else:
+                instruction = "Type a sector number 1-9, then press Enter"
+        instr_surf = self.small_font.render(instruction, True, (200, 200, 200))
+        self.surface.blit(instr_surf, (menu_x + 20, menu_y + 50))
+        
+        # Get sonar response options
+        options = state.get_sonar_response_options(defending_team)
+        
+        # True Type Selection
+        y_pos = menu_y + 75
+        true_rect = pygame.Rect(menu_x + 20, y_pos, menu_width - 40, 45)
+        pygame.draw.rect(self.surface, (50, 100, 50), true_rect)
+        pygame.draw.rect(self.surface, (100, 255, 100) if input_step == "true_type" else (120, 180, 120), true_rect, 3)
+
+        true_label_text = "TRUE TYPE: " + (true_type.upper() if true_type else "(press 1/2/3)")
+        text = self.small_font.render(true_label_text, True, (100, 255, 100) if true_type else (220, 220, 220))
+        self.surface.blit(text, (menu_x + 30, y_pos + 12))
+        
+        # False Type Selection
+        y_pos += 70
+        false_label = self.small_font.render("FALSE TYPE:", True, (255, 150, 100))
+        self.surface.blit(false_label, (menu_x + 20, y_pos))
+        
+        y_pos += 30
+        button_width = 140
+        button_height = 45
+        available_false_types = [t for t in ["row", "col", "sector"] if t != true_type] if true_type else ["row", "col", "sector"]
+        
+        self.false_type_buttons = []
+        for i, t in enumerate(available_false_types):
+            x_pos = menu_x + 30 + (i * 160)
+            btn_rect = pygame.Rect(x_pos, y_pos, button_width, button_height)
+            
+            color = (100, 200, 100) if false_type == t else (60, 80, 120)
+            pygame.draw.rect(self.surface, color, btn_rect)
+            pygame.draw.rect(self.surface, (200, 200, 200), btn_rect, 2)
+            
+            text = self.small_font.render(f"{i+1}. {t.upper()}", True, (255, 255, 255))
+            text_rect = text.get_rect(center=btn_rect.center)
+            self.surface.blit(text, text_rect)
+            
+            self.false_type_buttons.append((btn_rect, t))
+        
+        # False Value Selection  
+        y_pos += 65
+        value_label = self.small_font.render("FALSE VALUE:", True, (255, 150, 100))
+        self.surface.blit(value_label, (menu_x + 20, y_pos))
+        
+        y_pos += 30
+        if false_type and false_type in options:
+            possible_values = options[false_type]
+            self.false_value_buttons = []
+            
+            for i, val in enumerate(possible_values[:3]):  # Show up to 3 values
+                x_pos = menu_x + 30 + (i * 160)
+                btn_rect = pygame.Rect(x_pos, y_pos, 140, 40)
+                
+                color = (100, 200, 100) if false_value == val else (60, 80, 120)
+                pygame.draw.rect(self.surface, color, btn_rect)
+                pygame.draw.rect(self.surface, (200, 200, 200), btn_rect, 2)
+                
+                val_str = str(val) if isinstance(val, int) else val
+                text = self.small_font.render(val_str, True, (255, 255, 255))
+                text_rect = text.get_rect(center=btn_rect.center)
+                self.surface.blit(text, text_rect)
+                
+                self.false_value_buttons.append((btn_rect, val))
+
+        # Typed buffer display
+        buffer_y = menu_y + menu_height - 85
+        buffer_rect = pygame.Rect(menu_x + 20, buffer_y, menu_width - 40, 40)
+        pygame.draw.rect(self.surface, (25, 25, 35), buffer_rect)
+        pygame.draw.rect(self.surface, (120, 120, 140), buffer_rect, 2)
+        buffer_text = f"INPUT: {input_buffer or '-'}"
+        buffer_surf = self.font.render(buffer_text, True, (255, 255, 255))
+        self.surface.blit(buffer_surf, (menu_x + 30, buffer_y + 8))
+
+        # Confirm button
+        y_pos += 60
+        confirm_enabled = true_type and false_type and false_value is not None
+        confirm_color = (100, 200, 100) if confirm_enabled else (80, 80, 80)
+        confirm_rect = pygame.Rect(menu_x + 100, y_pos, 350, 50)
+        pygame.draw.rect(self.surface, confirm_color, confirm_rect)
+        pygame.draw.rect(self.surface, (200, 200, 200), confirm_rect, 2)
+        
+        confirm_text = self.font.render("PRESS ENTER TO CONFIRM", True, (255, 255, 255))
+        confirm_text_rect = confirm_text.get_rect(center=confirm_rect.center)
+        self.surface.blit(confirm_text, confirm_text_rect)
+        
+        self.confirm_button_rect = confirm_rect
+

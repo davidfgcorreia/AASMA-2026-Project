@@ -52,6 +52,35 @@ def test_renderer_only_draws_active_team_submarine():
     assert inactive_pixel[:3] == (30, 70, 120)
 
 
+def test_renderer_only_shows_active_team_mine_count_in_panel():
+    pygame.init()
+    map_data = MapData(width=6, height=5, tiles=[["."] * 6 for _ in range(5)])
+    surface = pygame.Surface((800, 600))
+    renderer = Renderer(surface, map_data, background_path=None)
+
+    rendered_texts = []
+
+    class DummyFont:
+        def render(self, text, *_args, **_kwargs):
+            rendered_texts.append(text)
+            return pygame.Surface((1, 1))
+
+    renderer.font = DummyFont()
+    state = GameState(
+        map_data=map_data,
+        subs={"BLUE": SubmarineState(x=1, y=1), "RED": SubmarineState(x=4, y=3)},
+    )
+    state.mines = [
+        type("Mine", (), {"x": 1, "y": 1, "owner": "BLUE"})(),
+        type("Mine", (), {"x": 4, "y": 3, "owner": "RED"})(),
+    ]
+
+    renderer._draw_mines_status(0, 0, state, {"active_team": "BLUE"})
+
+    assert "BLUE: 1 deployed" in rendered_texts
+    assert not any(text.startswith("RED:") for text in rendered_texts)
+
+
 
 def test_choose_start_positions_mixed_agent_and_human(monkeypatch, tmp_path):
     map_data = MapData(width=6, height=5, tiles=[["."] * 6 for _ in range(5)])

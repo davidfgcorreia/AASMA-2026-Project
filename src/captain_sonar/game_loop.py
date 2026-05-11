@@ -10,6 +10,7 @@ from .config import DEFAULT_SEED, FPS
 from .event_log import EventLogger
 from .game_state import GameState
 from .human_controller import HumanController
+from .sonar_response_modal import SonarResponseModal
 from .renderer import Renderer
 from .belief_tracker import BeliefTracker
 
@@ -49,6 +50,7 @@ class GameLoop:
         # Two separate belief trackers: one for each team's belief about opponent
         self.belief_blue = BeliefTracker(state.map_data, own_team="BLUE")  # Blue's belief about Red
         self.belief_red = BeliefTracker(state.map_data, own_team="RED")    # Red's belief about Blue
+        self.sonar_modal = SonarResponseModal(state)
         if self.logger:
             subs = {team: {"x": sub.x, "y": sub.y} for team, sub in state.subs.items()}
             self.logger.log_header({"map": map_name, "seed": seed, "teams": list(state.subs.keys()), "subs": subs})
@@ -61,6 +63,45 @@ class GameLoop:
             active_controller = self.human_blue if active_team == "BLUE" else self.human_red
             active_phase = phase_by_team.get(active_team, "move")
 
+            if self.sonar_modal.active and self.sonar_modal.waiting_team == active_team:
+                waiting_team = self.sonar_modal.waiting_team
+                if waiting_team is None:
+                    continue
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        running = False
+                    else:
+                        committed_action = self.sonar_modal.handle_event(event)
+                        if committed_action is not None:
+                            self.state.apply_actions([committed_action])
+                            self.belief_blue.update(self.state.events)
+                            self.belief_red.update(self.state.events)
+                            if self.logger:
+                                self.logger.log_turn(self.state.turn, [committed_action], self.state.events)
+                            phase_by_team[active_team] = "move"
+                            active_team = self._other_team(active_team)
+                            break
+
+                if not self.sonar_modal.active:
+                    continue
+
+                ui_state = active_controller.ui_state() if active_controller else {}
+                ui_state["active_team"] = active_team
+                ui_state["turn_phase"] = "sonar_response"
+                active_belief = self.belief_blue if active_team == "BLUE" else self.belief_red
+                cursor = ui_state.get("cursor")
+                if isinstance(cursor, (list, tuple)) and len(cursor) >= 2:
+                    ui_state["belief_prob"] = active_belief.probability_at(cursor[0], cursor[1])
+                ui_state["belief_heatmap"] = active_belief.heatmap()
+                ui_state["belief_best_sector"] = active_belief.most_likely_sector()
+                ui_state["belief_best_cell"] = active_belief.most_likely_cell()
+
+                self.renderer.draw(self.state, ui_state)
+                self.sonar_modal.render(self.renderer)
+                pygame.display.flip()
+                self.clock.tick(FPS)
+                continue
+
             if self._is_agent_team(active_team) and not self.state.game_over:
                 if self.state.skip_turns.get(active_team, 0) > 0:
                     self.state.apply_actions([])
@@ -72,18 +113,32 @@ class GameLoop:
                         active_team = "RED" if active_team == "BLUE" else "BLUE"
                     continue
                 actions = order_actions(self._choose_agent_actions(active_team, active_phase))
-                self.state.apply_actions(actions)
-                self.belief_blue.update(self.state.events)
-                self.belief_red.update(self.state.events)
-                if self.logger:
-                    self.logger.log_turn(self.state.turn, actions, self.state.events)
+                sonar_action = next((action for action in actions if action.type == ActionType.SONAR), None)
                 if active_phase == "move":
                     if self._team_just_surfaced(active_team):
+                        self.state.apply_actions(actions)
+                        self.belief_blue.update(self.state.events)
+                        self.belief_red.update(self.state.events)
+                        if self.logger:
+                            self.logger.log_turn(self.state.turn, actions, self.state.events)
                         phase_by_team[active_team] = "move"
                         active_team = "RED" if active_team == "BLUE" else "BLUE"
                     else:
+                        self.state.apply_actions(actions)
+                        self.belief_blue.update(self.state.events)
+                        self.belief_red.update(self.state.events)
+                        if self.logger:
+                            self.logger.log_turn(self.state.turn, actions, self.state.events)
                         phase_by_team[active_team] = "system"
                 else:
+                    if sonar_action is not None and not self._is_agent_team(self._other_team(active_team)):
+                        self.sonar_modal.start(sonar_action, self._other_team(active_team))
+                    else:
+                        self.state.apply_actions(actions)
+                        self.belief_blue.update(self.state.events)
+                        self.belief_red.update(self.state.events)
+                        if self.logger:
+                            self.logger.log_turn(self.state.turn, actions, self.state.events)
                     phase_by_team[active_team] = "move"
                     active_team = "RED" if active_team == "BLUE" else "BLUE"
                 continue
@@ -131,15 +186,23 @@ class GameLoop:
                 else:
                     if self._is_valid_system_phase_queue(active_controller.queue):
                         actions = order_actions(list(active_controller.queue))
-                        self.state.apply_actions(actions)
-                        self.belief_blue.update(self.state.events)
-                        self.belief_red.update(self.state.events)
-                        if self.logger:
-                            self.logger.log_turn(self.state.turn, actions, self.state.events)
-                        active_controller.reset_turn()
-                        phase_by_team[active_team] = "move"
-                        active_team = "RED" if active_team == "BLUE" else "BLUE"
-                        phase_handled = True
+                        sonar_action = next((action for action in actions if action.type == ActionType.SONAR), None)
+                        if sonar_action is not None and not self._is_agent_team(self._other_team(active_team)):
+                            self.sonar_modal.start(sonar_action, self._other_team(active_team))
+                            active_controller.reset_turn()
+                            phase_by_team[active_team] = "move"
+                            active_team = self._other_team(active_team)
+                            phase_handled = True
+                        else:
+                            self.state.apply_actions(actions)
+                            self.belief_blue.update(self.state.events)
+                            self.belief_red.update(self.state.events)
+                            if self.logger:
+                                self.logger.log_turn(self.state.turn, actions, self.state.events)
+                            active_controller.reset_turn()
+                            phase_by_team[active_team] = "move"
+                            active_team = "RED" if active_team == "BLUE" else "BLUE"
+                            phase_handled = True
 
                 if not phase_handled:
                     active_controller.confirmed = False
@@ -161,11 +224,18 @@ class GameLoop:
             ui_state["belief_best_cell"] = active_belief.most_likely_cell()
             
             self.renderer.draw(self.state, ui_state)
+            
+            # Draw sonar response menu if active
+            self.sonar_modal.render(self.renderer)
+            
             pygame.display.flip()
             self.clock.tick(FPS)
 
     def _is_agent_team(self, team: str) -> bool:
         return self.team_play_types.get(team, TEAM_HUMAN) == TEAM_AGENT
+
+    def _other_team(self, team: str) -> str:
+        return "RED" if team == "BLUE" else "BLUE"
 
     def _choose_agent_actions(self, team: str, phase: str) -> list[Action]:
         manager = self.agent_managers.get(team)
@@ -240,3 +310,8 @@ class GameLoop:
             ActionType.TRIGGER_MINE,
             ActionType.REPAIR,
         )
+
+
+
+
+

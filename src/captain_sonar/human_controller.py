@@ -40,6 +40,11 @@ class HumanController:
     _last_mouse_pos: Tuple[int, int] = (0, 0)
     map_data: Optional[MapData] = None
     game_state: Optional[object] = None
+    # Sonar response handling
+    sonar_response_pending: bool = False
+    sonar_true_type: Optional[str] = None
+    sonar_false_type: Optional[str] = None
+    sonar_false_value: Optional[int] = None
 
     def reset_turn(self) -> None:
         self.queue.clear()
@@ -48,6 +53,10 @@ class HumanController:
         self.silence_steps = MAX_SILENCE_STEPS
         self.engineer_index = -1
         self.engineer_button_id = ""
+        self.sonar_response_pending = False
+        self.sonar_true_type = None
+        self.sonar_false_type = None
+        self.sonar_false_value = None
         self.engineer_circuit_part = "not"
         self.engineer_function_type = "radioactive"
 
@@ -421,6 +430,35 @@ class HumanController:
         if len(self.queue) >= MAX_ACTIONS_PER_TURN:
             return
         self.queue.append(Action(actor=self.team, type=ActionType.SURFACE, payload={}))
+
+    def set_sonar_response(self, true_type: str, false_type: str, false_value: int) -> bool:
+        """
+        Set the sonar response choices for the defending team.
+        
+        Args:
+            true_type: The type they're responding to (row/col/sector)
+            false_type: The type they choose to make false
+            false_value: The value for the false type
+        
+        Returns:
+            True if valid, False otherwise
+        """
+        # Validate types
+        if true_type not in ("row", "col", "sector") or false_type not in ("row", "col", "sector"):
+            return False
+        if true_type == false_type:
+            return False
+        
+        # Validate value
+        if not isinstance(false_value, int):
+            return False
+        
+        self.sonar_true_type = true_type
+        self.sonar_false_type = false_type
+        self.sonar_false_value = false_value
+        self.sonar_response_pending = False
+        
+        return True
 
     def _current_engineer_direction(self) -> str | None:
         for action in self.queue:
