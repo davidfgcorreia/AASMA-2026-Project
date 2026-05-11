@@ -792,7 +792,7 @@ class Renderer:
                 self.false_value_buttons.append((btn_rect, val))
 
         # Typed buffer display
-        buffer_y = menu_y + menu_height - 85
+        buffer_y = menu_y + menu_height - 100
         buffer_rect = pygame.Rect(menu_x + 20, buffer_y, menu_width - 40, 40)
         pygame.draw.rect(self.surface, (25, 25, 35), buffer_rect)
         pygame.draw.rect(self.surface, (120, 120, 140), buffer_rect, 2)
@@ -801,10 +801,10 @@ class Renderer:
         self.surface.blit(buffer_surf, (menu_x + 30, buffer_y + 8))
 
         # Confirm button
-        y_pos += 60
+        y_pos += 110
         confirm_enabled = true_type and false_type and false_value is not None
         confirm_color = (100, 200, 100) if confirm_enabled else (80, 80, 80)
-        confirm_rect = pygame.Rect(menu_x + 100, y_pos, 350, 50)
+        confirm_rect = pygame.Rect(menu_x + 80, y_pos, 350, 30)
         pygame.draw.rect(self.surface, confirm_color, confirm_rect)
         pygame.draw.rect(self.surface, (200, 200, 200), confirm_rect, 2)
         
