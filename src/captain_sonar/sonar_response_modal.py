@@ -60,7 +60,7 @@ class SonarResponseModal:
             return None
 
         if self.stage == "false_type":
-            chosen = self._type_from_key(event.key)
+            chosen = self._false_type_from_key(event.key)
             if chosen is not None and chosen != self.true_type:
                 self.false_type = chosen
                 self.stage = "false_value"
@@ -129,6 +129,18 @@ class SonarResponseModal:
             pygame.K_KP2: "col",
             pygame.K_3: "sector",
             pygame.K_KP3: "sector",
+        }
+        return mapping.get(key)
+
+    def _false_type_from_key(self, key: int) -> str | None:
+        options = [t for t in ("row", "col", "sector") if t != self.true_type]
+        mapping = {
+            pygame.K_1: options[0] if len(options) > 0 else None,
+            pygame.K_KP1: options[0] if len(options) > 0 else None,
+            pygame.K_2: options[1] if len(options) > 1 else None,
+            pygame.K_KP2: options[1] if len(options) > 1 else None,
+            pygame.K_3: options[2] if len(options) > 2 else None,
+            pygame.K_KP3: options[2] if len(options) > 2 else None,
         }
         return mapping.get(key)
 

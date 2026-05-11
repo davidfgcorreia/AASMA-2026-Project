@@ -790,9 +790,8 @@ class GameState:
             "actor": action.actor,
             "info_1": pieces[0],  # Unknown if true or false
             "info_2": pieces[1],  # Unknown if true or false
-            # Store internal truth for validation/logging purposes only
-            "_true_info": true_piece,
-            "_false_info": false_piece,
+            "true_info": true_piece,
+            "false_info": false_piece,
         })
 
     # === REPAIR (ENGINEER) ===

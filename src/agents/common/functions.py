@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, is_dataclass
-import random
 from pathlib import Path
 from typing import Any, Iterable, TYPE_CHECKING
 
@@ -237,60 +236,6 @@ def call_agent_activity(
     )
 
 
-def monte_carlo_exploration(
-    *,
-    team_view: dict[str, Any],
-    role: AgentRole | str,
-    candidate_actions: Iterable[dict[str, Any]],
-    rollouts: int = 24,
-    seed: int | None = None,
-    role_memory: str | None = None,
-    master_memory: str | None = None,
-) -> dict[str, Any]:
-    """Run a lightweight Monte Carlo-style scoring pass over candidate actions.
-
-    This is a simple heuristic version: each candidate is scored across a number
-    of randomized rollouts using team snapshot signals, then the best-scoring
-    candidate is returned.
-    """
-    resolved_role = role.value if isinstance(role, AgentRole) else str(role)
-    rng = random.Random(seed)
-    actions = [dict(action) for action in candidate_actions]
-    if not actions:
-        return {
-            "role": resolved_role,
-            "selected_action": None,
-            "scores": [],
-            "rollouts": rollouts,
-        }
-
-    scores: list[dict[str, Any]] = []
-    for action in actions:
-        total_score = 0.0
-        samples: list[float] = []
-        for _ in range(max(1, rollouts)):
-            sample_score = _score_candidate_action(action, team_view, rng, role_memory, master_memory)
-            total_score += sample_score
-            samples.append(sample_score)
-        scores.append(
-            {
-                "action": action,
-                "mean_score": total_score / float(max(1, rollouts)),
-                "samples": samples,
-            }
-        )
-
-    scores.sort(key=lambda item: item["mean_score"], reverse=True)
-    return {
-        "role": resolved_role,
-        "selected_action": scores[0]["action"],
-        "scores": scores,
-        "rollouts": rollouts,
-        "team": team_view.get("team"),
-        "turn": team_view.get("turn"),
-    }
-
-
 def send_inter_agent_message(
     manager: TeamAgentManager,
     sender: AgentRole,
@@ -337,64 +282,6 @@ def _stringify(value: Any) -> str:
     if isinstance(value, tuple):
         return "(" + ", ".join(_stringify(item) for item in value) + ")"
     return repr(value)
-
-
-def _score_candidate_action(
-    action: dict[str, Any],
-    team_view: dict[str, Any],
-    rng: random.Random,
-    role_memory: str | None,
-    master_memory: str | None,
-) -> float:
-    action_type = str(action.get("type", "")).upper()
-    base_score = 0.0
-
-    if action_type == "MOVE":
-        base_score += 2.0
-        if team_view.get("last_action_system"):
-            base_score -= 0.5
-        if team_view.get("system_utilization", {}).get("ready", {}).get("torpedo"):
-            base_score += 0.5
-    elif action_type == "SILENCE":
-        base_score += 1.8
-        base_score += 0.2 if team_view.get("radio_operator", {}).get("confidence", 0.0) < 0.5 else -0.1
-    elif action_type in {"TORPEDO", "MINE", "TRIGGER_MINE"}:
-        base_score += 2.5
-        confidence = team_view.get("radio_operator", {}).get("confidence", 0.0)
-        base_score += confidence * 2.5
-        if action_type == "TRIGGER_MINE":
-            base_score += 0.25
-    elif action_type in {"SONAR", "DRONE"}:
-        base_score += 2.2
-        confidence = team_view.get("radio_operator", {}).get("confidence", 0.0)
-        base_score += (1.0 - confidence) * 1.5
-    elif action_type == "REPAIR":
-        base_score += 1.6
-        if team_view.get("own_submarine", {}).get("damage", 0) > 0:
-            base_score += 1.0
-    elif action_type == "SURFACE":
-        base_score += 0.8
-        if team_view.get("skip_turns", 0) > 0:
-            base_score += 0.8
-
-    target = action.get("payload", {}).get("target", {})
-    if isinstance(target, dict):
-        x = target.get("x")
-        y = target.get("y")
-        if isinstance(x, int) and isinstance(y, int):
-            own_sub = team_view.get("own_submarine", {})
-            ox = own_sub.get("x")
-            oy = own_sub.get("y")
-            if isinstance(ox, int) and isinstance(oy, int):
-                distance = abs(ox - x) + abs(oy - y)
-                base_score += max(0.0, 4.0 - float(distance)) * 0.15
-
-    if role_memory:
-        base_score += min(0.5, len(role_memory) / 2000.0)
-    if master_memory:
-        base_score += min(0.5, len(master_memory) / 4000.0)
-
-    return base_score + rng.random() * 0.15
 
 
 def action_signature(action: dict[str, Any]) -> str:

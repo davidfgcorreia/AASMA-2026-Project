@@ -61,8 +61,12 @@ class BeliefTracker:
                 elif etype == "sonar":
                     true_info = event.get("true_info")
                     false_info = event.get("false_info")
+                    info_1 = event.get("info_1")
+                    info_2 = event.get("info_2")
                     if isinstance(true_info, dict) and isinstance(false_info, dict):
                         self._apply_sonar(true_info, false_info)
+                    elif isinstance(info_1, dict) and isinstance(info_2, dict):
+                        self._apply_sonar(info_1, info_2)
                 elif etype == "explosion":
                     hits = event.get("hits", [])
                     impact = event.get("impact")

@@ -63,7 +63,7 @@ class GameLoop:
             active_controller = self.human_blue if active_team == "BLUE" else self.human_red
             active_phase = phase_by_team.get(active_team, "move")
 
-            if self.sonar_modal.active and self.sonar_modal.waiting_team == active_team:
+            if self.sonar_modal.active:
                 waiting_team = self.sonar_modal.waiting_team
                 if waiting_team is None:
                     continue
@@ -73,22 +73,24 @@ class GameLoop:
                     else:
                         committed_action = self.sonar_modal.handle_event(event)
                         if committed_action is not None:
+                            attacker_team = committed_action.actor
                             self.state.apply_actions([committed_action])
                             self.belief_blue.update(self.state.events)
                             self.belief_red.update(self.state.events)
                             if self.logger:
                                 self.logger.log_turn(self.state.turn, [committed_action], self.state.events)
-                            phase_by_team[active_team] = "move"
-                            active_team = self._other_team(active_team)
+                            phase_by_team[attacker_team] = "move"
+                            active_team = self._other_team(attacker_team)
                             break
 
                 if not self.sonar_modal.active:
                     continue
 
-                ui_state = active_controller.ui_state() if active_controller else {}
-                ui_state["active_team"] = active_team
+                modal_controller = self.human_blue if waiting_team == "BLUE" else self.human_red
+                ui_state = modal_controller.ui_state() if modal_controller else {}
+                ui_state["active_team"] = waiting_team
                 ui_state["turn_phase"] = "sonar_response"
-                active_belief = self.belief_blue if active_team == "BLUE" else self.belief_red
+                active_belief = self.belief_blue if waiting_team == "BLUE" else self.belief_red
                 cursor = ui_state.get("cursor")
                 if isinstance(cursor, (list, tuple)) and len(cursor) >= 2:
                     ui_state["belief_prob"] = active_belief.probability_at(cursor[0], cursor[1])
@@ -187,12 +189,17 @@ class GameLoop:
                     if self._is_valid_system_phase_queue(active_controller.queue):
                         actions = order_actions(list(active_controller.queue))
                         sonar_action = next((action for action in actions if action.type == ActionType.SONAR), None)
-                        if sonar_action is not None and not self._is_agent_team(self._other_team(active_team)):
+                        if (
+                            sonar_action is not None
+                            and self._can_start_sonar_response(active_team)
+                            and not self._is_agent_team(self._other_team(active_team))
+                        ):
                             self.sonar_modal.start(sonar_action, self._other_team(active_team))
                             active_controller.reset_turn()
                             phase_by_team[active_team] = "move"
-                            active_team = self._other_team(active_team)
                             phase_handled = True
+                        elif sonar_action is not None and not self._can_start_sonar_response(active_team):
+                            active_controller.confirmed = False
                         else:
                             self.state.apply_actions(actions)
                             self.belief_blue.update(self.state.events)
@@ -310,6 +317,13 @@ class GameLoop:
             ActionType.TRIGGER_MINE,
             ActionType.REPAIR,
         )
+
+    def _can_start_sonar_response(self, team: str) -> bool:
+        if not self.state.system_ready(team, "sonar"):
+            return False
+        if self.state.last_action_system.get(team, False):
+            return False
+        return not self.state._system_has_breakdown(team, "sonar")
 
 
 
