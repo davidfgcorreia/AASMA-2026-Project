@@ -166,6 +166,7 @@ def get_engineer_board_state(state: GameState, team: str) -> dict[str, Any] | No
 
 def get_team_view(state: GameState, team: str) -> dict[str, Any]:
     enemy_team = next((name for name in state.subs if name != team), None)
+    radio_operator = state.get_radio_operator(team)
     return {
         "team": team,
         "enemy_team": enemy_team,
@@ -175,12 +176,19 @@ def get_team_view(state: GameState, team: str) -> dict[str, Any]:
         "map": get_map_state(state),
         "own_submarine": get_submarine_state(state, team),
         "own_routes": get_routes(state).get(team, []),
+        "own_trajectory": [
+            {"x": x, "y": y}
+            for x, y in state.trajectory.get(team, [])
+        ],
         "own_gauges": get_gauges(state, team),
         "system_utilization": get_system_utilization(state, team),
         "engineer_board": get_engineer_board_state(state, team),
         "last_action_system": state.last_action_system.get(team, False),
         "skip_turns": state.skip_turns.get(team, 0),
         "radio_operator": get_radio_operator_state(state, team),
+        "enemy_trajectory_predicted": (
+            radio_operator.heard_move_sequence() if radio_operator is not None else []
+        ),
         "events": get_events(state),
     }
 

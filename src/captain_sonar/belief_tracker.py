@@ -47,9 +47,7 @@ class BeliefTracker:
                     if isinstance(direction, str):
                         self._apply_move(direction)
                 elif etype == "silence":
-                    direction = event.get("direction")
-                    steps = event.get("steps")
-                    self._apply_silence(direction if isinstance(direction, str) else None, steps)
+                    self._apply_silence(None, None)
 
             # Sensors are actions by our team that reveal info about the enemy.
             if actor == self.own_team:

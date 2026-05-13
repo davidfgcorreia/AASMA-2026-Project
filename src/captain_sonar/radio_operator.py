@@ -109,12 +109,8 @@ class RadioOperator:
                     self._current_positions = None  # Invalidate cache
             
             elif etype == "silence":
-                direction = event.get("direction")
-                steps = event.get("steps", 1)
-                if isinstance(direction, str):
-                    for _ in range(steps):
-                        self.heard_moves.append(f"SILENCE_{direction}")
-                    self._current_positions = None
+                self.heard_moves.append("SILENCE")
+                self._current_positions = None
             
             elif etype == "surface":
                 sector = event.get("sector")
@@ -189,62 +185,67 @@ class RadioOperator:
         valid_endings: Set[Tuple[int, int]] = set()
         
         for start_x, start_y in candidates:
-            # Trace path from this starting position
-            path = {(start_x, start_y)}
-            x, y = start_x, start_y
-            valid = True
-            
+            states = {(start_x, start_y, frozenset({(start_x, start_y)}))}
             for move in self.heard_moves:
-                dx, dy = 0, 0
-                
-                if move == "N":
-                    dy = -1
-                elif move == "S":
-                    dy = 1
-                elif move == "E":
-                    dx = 1
-                elif move == "W":
-                    dx = -1
-                elif move.startswith("SILENCE_"):
-                    # Parse SILENCE_X as single step in direction X
-                    dir_char = move.split("_")[1][0] if len(move.split("_")) > 1 else ""
-                    if dir_char == "N":
-                        dy = -1
-                    elif dir_char == "S":
-                        dy = 1
-                    elif dir_char == "E":
-                        dx = 1
-                    elif dir_char == "W":
-                        dx = -1
+                next_states: Set[Tuple[int, int, frozenset[Tuple[int, int]]]] = set()
+                for x, y, path in states:
+                    deltas: list[tuple[int, int]] = []
+                    if move == "N":
+                        deltas = [(0, -1)]
+                    elif move == "S":
+                        deltas = [(0, 1)]
+                    elif move == "E":
+                        deltas = [(1, 0)]
+                    elif move == "W":
+                        deltas = [(-1, 0)]
+                    elif move == "SILENCE":
+                        deltas = [(0, -1), (0, 1), (1, 0), (-1, 0)]
+                    elif move.startswith("SILENCE_"):
+                        dir_char = move.split("_")[1][0] if len(move.split("_")) > 1 else ""
+                        if dir_char == "N":
+                            deltas = [(0, -1)]
+                        elif dir_char == "S":
+                            deltas = [(0, 1)]
+                        elif dir_char == "E":
+                            deltas = [(1, 0)]
+                        elif dir_char == "W":
+                            deltas = [(-1, 0)]
+                    if move == "SILENCE":
+                        for dx, dy in deltas:
+                            for steps in range(1, MAX_SILENCE_STEPS + 1):
+                                nx, ny = x, y
+                                next_path = path
+                                valid = True
+                                for _ in range(steps):
+                                    nx += dx
+                                    ny += dy
+                                    if not self.map_data.in_bounds(nx, ny):
+                                        valid = False
+                                        break
+                                    if self.map_data.is_blocked(nx, ny):
+                                        valid = False
+                                        break
+                                    if (nx, ny) in next_path:
+                                        valid = False
+                                        break
+                                    next_path = next_path | {(nx, ny)}
+                                if valid:
+                                    next_states.add((nx, ny, next_path))
                     else:
-                        valid = False
-                        break
-                else:
-                    valid = False
+                        for dx, dy in deltas:
+                            nx, ny = x + dx, y + dy
+                            if not self.map_data.in_bounds(nx, ny):
+                                continue
+                            if self.map_data.is_blocked(nx, ny):
+                                continue
+                            if (nx, ny) in path:
+                                continue
+                            next_states.add((nx, ny, path | {(nx, ny)}))
+                states = next_states
+                if not states:
                     break
-                
-                # Attempt move
-                nx, ny = x + dx, y + dy
-                
-                # Check bounds
-                if not self.map_data.in_bounds(nx, ny):
-                    valid = False
-                    break
-                
-                # Check island
-                if self.map_data.is_blocked(nx, ny):
-                    valid = False
-                    break
-                
-                # Check crossing own path (conservative: assume no self-crossing)
-                if (nx, ny) in path:
-                    valid = False
-                    break
-                
-                path.add((nx, ny))
-                x, y = nx, ny
-            
-            if valid:
+
+            for x, y, _path in states:
                 valid_endings.add((x, y))
         
         self._current_positions = valid_endings if valid_endings else candidates
@@ -278,57 +279,67 @@ class RadioOperator:
                 if self.map_data.is_blocked(start_x, start_y):
                     continue
                 
-                # Trace from this start
-                x, y = start_x, start_y
-                path = {(x, y)}
-                valid = True
-                
+                states = {(start_x, start_y, frozenset({(start_x, start_y)}))}
                 for move in self.heard_moves:
-                    dx, dy = 0, 0
-                    
-                    if move == "N":
-                        dy = -1
-                    elif move == "S":
-                        dy = 1
-                    elif move == "E":
-                        dx = 1
-                    elif move == "W":
-                        dx = -1
-                    elif move.startswith("SILENCE_"):
-                        dir_char = move.split("_")[1][0] if len(move.split("_")) > 1 else ""
-                        if dir_char == "N":
-                            dy = -1
-                        elif dir_char == "S":
-                            dy = 1
-                        elif dir_char == "E":
-                            dx = 1
-                        elif dir_char == "W":
-                            dx = -1
+                    next_states: Set[Tuple[int, int, frozenset[Tuple[int, int]]]] = set()
+                    for x, y, path in states:
+                        deltas: list[tuple[int, int]] = []
+                        if move == "N":
+                            deltas = [(0, -1)]
+                        elif move == "S":
+                            deltas = [(0, 1)]
+                        elif move == "E":
+                            deltas = [(1, 0)]
+                        elif move == "W":
+                            deltas = [(-1, 0)]
+                        elif move == "SILENCE":
+                            deltas = [(0, -1), (0, 1), (1, 0), (-1, 0)]
+                        elif move.startswith("SILENCE_"):
+                            dir_char = move.split("_")[1][0] if len(move.split("_")) > 1 else ""
+                            if dir_char == "N":
+                                deltas = [(0, -1)]
+                            elif dir_char == "S":
+                                deltas = [(0, 1)]
+                            elif dir_char == "E":
+                                deltas = [(1, 0)]
+                            elif dir_char == "W":
+                                deltas = [(-1, 0)]
+                        if move == "SILENCE":
+                            for dx, dy in deltas:
+                                for steps in range(1, MAX_SILENCE_STEPS + 1):
+                                    nx, ny = x, y
+                                    next_path = path
+                                    valid = True
+                                    for _ in range(steps):
+                                        nx += dx
+                                        ny += dy
+                                        if not self.map_data.in_bounds(nx, ny):
+                                            valid = False
+                                            break
+                                        if self.map_data.is_blocked(nx, ny):
+                                            valid = False
+                                            break
+                                        if (nx, ny) in next_path:
+                                            valid = False
+                                            break
+                                        next_path = next_path | {(nx, ny)}
+                                    if valid:
+                                        next_states.add((nx, ny, next_path))
                         else:
-                            valid = False
-                            break
-                    else:
-                        valid = False
+                            for dx, dy in deltas:
+                                nx, ny = x + dx, y + dy
+                                if not self.map_data.in_bounds(nx, ny):
+                                    continue
+                                if self.map_data.is_blocked(nx, ny):
+                                    continue
+                                if (nx, ny) in path:
+                                    continue
+                                next_states.add((nx, ny, path | {(nx, ny)}))
+                    states = next_states
+                    if not states:
                         break
-                    
-                    nx, ny = x + dx, y + dy
-                    
-                    if not self.map_data.in_bounds(nx, ny):
-                        valid = False
-                        break
-                    
-                    if self.map_data.is_blocked(nx, ny):
-                        valid = False
-                        break
-                    
-                    if (nx, ny) in path:
-                        valid = False
-                        break
-                    
-                    path.add((nx, ny))
-                    x, y = nx, ny
-                
-                if valid:
+
+                if states:
                     valid_starts.add((start_x, start_y))
         
         self._possible_starts = valid_starts if valid_starts else {

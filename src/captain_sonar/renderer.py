@@ -243,7 +243,7 @@ class Renderer:
             y_offset = self._draw_mines_status(panel_x + 12, y_offset, state, ui_state)
             y_offset = self._draw_surface_status(panel_x + 12, y_offset, state)
             y_offset = self._draw_queue(panel_x + 12, y_offset, ui_state)
-        self._draw_controls_hints(panel_x + 12, y_offset, ui_state)
+            self._draw_controls_hints(panel_x + 12, y_offset, ui_state)
 
     def _draw_radio_belief(self, x: int, y: int, ui_state) -> int:
         """Compact belief status for the radio operator."""
@@ -640,11 +640,8 @@ class Renderer:
         y += 16
 
         if turn_phase == "move":
-            silence_steps = int(ui_state.get("silence_steps", 4))
-            active_action = str(ui_state.get("active_action") or "")
-            silence_hint = f"F silence ({silence_steps} steps, Q/E adjust)" if active_action == "SILENCE" else "F silence | Q/E steps when F active"
             hints = [
-                f"WASD move | {silence_hint}",
+                "WASD move",
                 "C surface",
                 "1-6 choose charge to load",
                 "P engineer board",
@@ -652,7 +649,15 @@ class Renderer:
                 "Bkspc undo"
             ]
         else:
+            silence_steps = int(ui_state.get("silence_steps", 4))
+            active_action = str(ui_state.get("active_action") or "")
+            silence_hint = (
+                f"F silence ({silence_steps} steps, Q/E adjust)"
+                if active_action == "SILENCE"
+                else "F silence | Q/E steps when F active"
+            )
             hints = [
+                f"{silence_hint}",
                 "T torpedo | O sonar",
                 "V drone | M mine | G trigger",
                 "R repair",

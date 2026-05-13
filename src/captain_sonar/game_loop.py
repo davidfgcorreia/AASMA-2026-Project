@@ -45,8 +45,8 @@ class GameLoop:
 
         self.team_play_types = normalized_play_types
         self.agent_managers = dict(agent_managers or {})
-        self.human_blue = HumanController(team="BLUE") if not self._is_agent_team("BLUE") else None
-        self.human_red = HumanController(team="RED") if not self._is_agent_team("RED") else None
+        self.human_blue = HumanController("BLUE") if not self._is_agent_team("BLUE") else None
+        self.human_red = HumanController("RED") if not self._is_agent_team("RED") else None
         # Two separate belief trackers: one for each team's belief about opponent
         self.belief_blue = BeliefTracker(state.map_data, own_team="BLUE")  # Blue's belief about Red
         self.belief_red = BeliefTracker(state.map_data, own_team="RED")    # Red's belief about Blue
@@ -256,9 +256,10 @@ class GameLoop:
             return []
 
         allowed = (
-            {ActionType.MOVE, ActionType.SILENCE, ActionType.SURFACE}
+            {ActionType.MOVE, ActionType.SURFACE}
             if phase == "move"
             else {
+                ActionType.SILENCE,
                 ActionType.TORPEDO,
                 ActionType.SONAR,
                 ActionType.DRONE,
@@ -302,7 +303,7 @@ class GameLoop:
     def _is_valid_move_phase_queue(self, queue: List[Action]) -> bool:
         if len(queue) != 1:
             return False
-        return queue[0].type in (ActionType.MOVE, ActionType.SILENCE, ActionType.SURFACE)
+        return queue[0].type in (ActionType.MOVE, ActionType.SURFACE)
 
     def _is_valid_system_phase_queue(self, queue: List[Action]) -> bool:
         if len(queue) > 1:
@@ -310,6 +311,7 @@ class GameLoop:
         if not queue:
             return True
         return queue[0].type in (
+            ActionType.SILENCE,
             ActionType.TORPEDO,
             ActionType.SONAR,
             ActionType.DRONE,

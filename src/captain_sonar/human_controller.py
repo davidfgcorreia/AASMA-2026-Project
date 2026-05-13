@@ -262,6 +262,7 @@ class HumanController:
         return any(
             action.type
             in (
+                ActionType.SILENCE,
                 ActionType.TORPEDO,
                 ActionType.SONAR,
                 ActionType.DRONE,
