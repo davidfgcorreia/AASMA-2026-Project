@@ -3,7 +3,7 @@
 ## Global Reviews
 
 - [ ] Confirm the APIs and their execution of the game environment.
-- [ ] Possible action generator returns a useful, consistent format.
+- [X] Possible action generator returns a useful, consistent format.
 
 ## Manager Agent
 
