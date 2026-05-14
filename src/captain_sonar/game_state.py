@@ -184,6 +184,10 @@ class GameState:
             # Resolve valid action
             self._resolve_action(action)
 
+        # Allow radio operators to process the events from this batch of actions
+        # so they can update heard moves and belief before the next turn.
+        self._update_radio_operators()
+
         self._check_game_over()
         self.turn += 1
 

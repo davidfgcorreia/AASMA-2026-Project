@@ -3,9 +3,9 @@ from __future__ import annotations
 from dataclasses import fields, is_dataclass
 from typing import Any, Iterable
 
-from .actions import Action, action_from_dict, action_to_dict, order_actions
+from .actions import Action, ActionType, action_to_dict, order_actions
 from .config import GAUGE_MAX_DEFAULT
-from .engineer_layout import ENGINEER_BUTTON_SPECS
+from .engineer_layout import ENGINEER_BUTTON_SPECS, engineer_button_spec_by_id
 from .game_state import GameState, SubmarineState
 from .map_loader import MapData
 
@@ -24,11 +24,97 @@ def apply_actions(state: GameState, actions: Iterable[Action | dict[str, Any]]) 
     """Normalize, order, and apply a batch of actions."""
     normalized: list[Action] = []
     for item in actions:
-        if isinstance(item, Action):
-            normalized.append(item)
-        else:
-            normalized.append(action_from_dict(item))
+        normalized.extend(_expand_action(item))
     state.apply_actions(order_actions(normalized))
+
+
+def _expand_action(item: Action | dict[str, Any]) -> list[Action]:
+    # Backwards-compatible: accept Action objects directly
+    if isinstance(item, Action):
+        return [item]
+    if not isinstance(item, dict):
+        return []
+
+    # New simplified request format: build primary move/surface action
+    # and optionally a system activation action.
+    raw = dict(item)
+    actor = str(raw.get("actor", ""))
+
+    # Determine primary request type
+    req_type = raw.get("type")
+    if isinstance(req_type, str):
+        primary_type_name = req_type.strip().upper()
+    else:
+        # default to MOVE when direction provided
+        primary_type_name = "MOVE" if raw.get("direction") is not None else "END_TURN"
+
+    try:
+        primary_action_type = ActionType[primary_type_name]
+    except KeyError:
+        return []
+
+    primary_payload: dict[str, Any] = {}
+
+    # Movement / surface
+    if primary_action_type == ActionType.MOVE:
+        direction = raw.get("direction")
+        if isinstance(direction, str):
+            primary_payload["direction"] = direction
+    elif primary_action_type == ActionType.SURFACE:
+        primary_payload = {}
+
+    # Charge system to load
+    system_to_load = raw.get("system_to_load")
+    if isinstance(system_to_load, str):
+        primary_payload["charge"] = system_to_load
+
+    # Engineer button selection by id
+    button_id = raw.get("engineer_button_id")
+    if isinstance(button_id, str):
+        spec = engineer_button_spec_by_id(button_id)
+        if spec is not None:
+            primary_payload["breakdown_choice"] = {
+                "button_id": spec.button_id,
+                "direction": spec.direction,
+                "slot": spec.slot_index,
+                "slot_index": spec.slot_index,
+                "circuit_part": spec.circuit_part,
+                "function_type": spec.function_type,
+            }
+
+    primary_action = Action(actor=actor, type=primary_action_type, payload=primary_payload)
+
+    actions: list[Action] = [primary_action]
+
+    # Optional system activation
+    activation = raw.get("system_activation") or raw.get("system_to_activate")
+    if activation is not None:
+        act_type_name = None
+        act_payload: dict[str, Any] = {}
+        if isinstance(activation, str):
+            act_type_name = activation.strip().upper()
+        elif isinstance(activation, dict):
+            t = activation.get("type")
+            if isinstance(t, str):
+                act_type_name = t.strip().upper()
+            p = activation.get("payload")
+            if isinstance(p, dict):
+                act_payload = dict(p)
+
+        extra_payload = raw.get("system_activation_payload")
+        if isinstance(extra_payload, dict):
+            act_payload.update(extra_payload)
+
+        if act_type_name is not None:
+            try:
+                act_type = ActionType[act_type_name]
+            except KeyError:
+                act_type = None
+            if act_type is not None:
+                actions.append(Action(actor=actor, type=act_type, payload=act_payload))
+
+    return actions
+
 
 
 def get_turn(state: GameState) -> int:
@@ -173,7 +259,6 @@ def get_team_view(state: GameState, team: str) -> dict[str, Any]:
         "turn": state.turn,
         "game_over": state.game_over,
         "winner": state.winner,
-        "map": get_map_state(state),
         "own_submarine": get_submarine_state(state, team),
         "own_routes": get_routes(state).get(team, []),
         "own_trajectory": [
@@ -182,7 +267,20 @@ def get_team_view(state: GameState, team: str) -> dict[str, Any]:
         ],
         "own_gauges": get_gauges(state, team),
         "system_utilization": get_system_utilization(state, team),
-        "engineer_board": get_engineer_board_state(state, team),
+        # Provide a minimal engineer board in the team view to avoid
+        # shipping the full UI button metadata every time.
+        "engineer_board": (
+            None
+            if state.breakdowns.get(team) is None
+            else {
+                "team": team,
+                "circuits_status": dict(getattr(state.breakdowns[team], "circuits_status", {})),
+                "crossed_by_direction": {
+                    direction: sorted(symbols)
+                    for direction, symbols in state.breakdowns[team].crossed_by_direction.items()
+                },
+            }
+        ),
         "last_action_system": state.last_action_system.get(team, False),
         "skip_turns": state.skip_turns.get(team, 0),
         "radio_operator": get_radio_operator_state(state, team),
@@ -199,7 +297,6 @@ def snapshot_game_state(state: GameState, turn_id: int | None = None) -> dict[st
         "turn": state.turn if turn_id is None else turn_id,
         "game_over": state.game_over,
         "winner": state.winner,
-        "map": get_map_state(state),
         "submarines": get_all_submarines(state),
         "routes": get_routes(state),
         "mines": get_mines(state),
@@ -218,8 +315,15 @@ def snapshot_game_state(state: GameState, turn_id: int | None = None) -> dict[st
         },
         "skip_turns": dict(state.skip_turns),
         "engineer_boards": {
-            team: get_engineer_board_state(state, team)
-            for team in state.breakdowns
+            team: {
+                "team": team,
+                "circuits_status": dict(getattr(breakdown, "circuits_status", {})),
+                "crossed_by_direction": {
+                    direction: sorted(symbols)
+                    for direction, symbols in breakdown.crossed_by_direction.items()
+                },
+            }
+            for team, breakdown in state.breakdowns.items()
         },
         "radio_operators": {
             team: get_radio_operator_state(state, team)
