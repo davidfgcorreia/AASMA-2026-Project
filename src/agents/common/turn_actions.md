@@ -5,14 +5,15 @@ This file stores the current turn activation window, action proposals, and the f
 ## Current Turn
 
 - turn_id: 0
-- status: active
-- active_roles: ['captain', 'first_mate']
+- status: collecting
+- active_roles: ['engineer', 'first_mate']
 - activation_deadline_ms: None
 - action_window: closed
 
 ## Proposals
 
-- none
+- engineer: {'type': 'MOVE', 'payload': {'direction': 'N'}}
+- first_mate: {'type': 'MOVE', 'payload': {}}
 
 ## Final Decisions
 

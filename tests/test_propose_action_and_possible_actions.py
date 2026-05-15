@@ -30,7 +30,6 @@ def build_full_team_view(team: str = "BLUE") -> dict[str, object]:
             Action(actor="RED", type=ActionType.MOVE, payload={"direction": "W", "charge": "sonar"}),
         ]
     )
-    state._update_radio_operators()
     state.gauges["BLUE"]["torpedo"] = 4
     state.gauges["BLUE"]["sonar"] = 0
     state.gauges["BLUE"]["drone"] = 0

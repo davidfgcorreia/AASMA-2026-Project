@@ -9,9 +9,9 @@ Tests coverage for:
 """
 
 import pytest
-from src.captain_sonar.map_loader import MapData
-from src.captain_sonar.radio_operator import RadioOperator
-from src.captain_sonar.game_state import GameState, SubmarineState
+from captain_sonar.map_loader import MapData
+from captain_sonar.radio_operator import RadioOperator
+from captain_sonar.game_state import GameState, SubmarineState
 
 
 class TestRadioOperatorRouteTracking:

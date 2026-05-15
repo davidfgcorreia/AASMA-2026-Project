@@ -1,0 +1,121 @@
+{
+  "turn_id": 1,
+  "iterations": [
+    {
+      "iteration": 0,
+      "proposals": {
+        "captain": {
+          "type": "MOVE",
+          "payload": {
+            "direction": "N"
+          }
+        },
+        "engineer": {
+          "type": "MOVE",
+          "payload": {
+            "direction": "N"
+          }
+        },
+        "first_mate": {
+          "type": "MOVE",
+          "payload": {
+            "direction": "E"
+          },
+          "messages": [
+            {
+              "recipient": "engineer",
+              "text": "Align to bearing 3",
+              "metadata": {
+                "urgency": 1
+              }
+            }
+          ]
+        }
+      },
+      "inbox": {
+        "captain": [],
+        "engineer": [
+          {
+            "sender": "first_mate",
+            "recipient": "engineer",
+            "turn_id": 0,
+            "text": "Align to bearing 3",
+            "metadata": {
+              "urgency": 1
+            }
+          }
+        ],
+        "first_mate": []
+      }
+    }
+  ],
+  "accepted": [
+    {
+      "role": "captain",
+      "type": "MOVE",
+      "payload": {
+        "direction": "N"
+      }
+    },
+    {
+      "role": "engineer",
+      "type": "MOVE",
+      "payload": {
+        "direction": "N"
+      }
+    }
+  ],
+  "execution": {
+    "turn_id": 0,
+    "accepted_intents": [
+      {
+        "role": "captain",
+        "type": "MOVE",
+        "payload": {
+          "direction": "N"
+        },
+        "turn_id": 0
+      },
+      {
+        "role": "engineer",
+        "type": "MOVE",
+        "payload": {
+          "direction": "N"
+        },
+        "turn_id": 0
+      }
+    ],
+    "executed_actions": [
+      {
+        "actor": "BLUE",
+        "type": "MOVE",
+        "payload": {
+          "direction": "N"
+        }
+      }
+    ],
+    "rejected_intents": [],
+    "events": [
+      {
+        "type": "breakdown",
+        "actor": "BLUE",
+        "direction": "N",
+        "button_id": "N-not-green-0",
+        "circuit_part": "not",
+        "function_type": "green"
+      },
+      {
+        "type": "move",
+        "actor": "BLUE",
+        "direction": "N",
+        "to": [
+          1,
+          0
+        ],
+        "charge": "torpedo"
+      }
+    ],
+    "success": true,
+    "errors": []
+  }
+}

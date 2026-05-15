@@ -259,6 +259,7 @@ def get_team_view(state: GameState, team: str) -> dict[str, Any]:
         "turn": state.turn,
         "game_over": state.game_over,
         "winner": state.winner,
+        "map": get_map_state(state),
         "own_submarine": get_submarine_state(state, team),
         "own_routes": get_routes(state).get(team, []),
         "own_trajectory": [
@@ -278,6 +279,20 @@ def get_team_view(state: GameState, team: str) -> dict[str, Any]:
                 "crossed_by_direction": {
                     direction: sorted(symbols)
                     for direction, symbols in state.breakdowns[team].crossed_by_direction.items()
+                },
+                "buttons_by_direction": {
+                    direction: [
+                        {
+                            "button_id": spec.button_id,
+                            "direction": spec.direction,
+                            "slot_index": spec.slot_index,
+                            "circuit_part": spec.circuit_part,
+                            "function_type": spec.function_type,
+                            "crossed": spec.button_id in state.breakdowns[team].crossed_by_direction.get(direction, set()),
+                        }
+                        for spec in specs
+                    ]
+                    for direction, specs in ENGINEER_BUTTON_SPECS.items()
                 },
             }
         ),

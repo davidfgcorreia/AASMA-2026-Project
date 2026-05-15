@@ -1,37 +1,29 @@
 from __future__ import annotations
 
+from dataclasses import asdict
 import time
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping, Tuple
+from typing import Any, Iterable, Mapping
+from typing import List
 
 from captain_sonar.api import get_team_view
 from captain_sonar.game_state import GameState
 from captain_sonar.map_loader import MapData
 
 from ..base import AgentBase, AgentRole
-from ..common.functions import action_signature, write_turn_actions
-
-
-GridPos = Tuple[int, int]
-StartPositionPicker = Callable[[str, MapData, Mapping[str, Any]], GridPos | None]
-
-
-@dataclass(slots=True)
-class AgentMessage:
-    sender: AgentRole
-    recipient: AgentRole | None
-    turn_id: int
-    text: str
-    metadata: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass(slots=True)
-class AgentManagerConfig:
-    max_messages_per_turn: int = 12
-    max_messages_per_pair_per_turn: int = 3
-    max_message_length: int = 2_000
-    activation_duration_ms: int = 5_000
+from ..common.functions import action_signature
+from .api_adapter import ManagerGameApiAdapter
+from .iteration_orchestrator import run_iteration_cycle
+from .ledger import write_turn_actions_ledger, write_iteration_ledger
+from .models import AgentManagerConfig, AgentMessage, ExecutionRecord, GridPos, StartPositionPicker
+from .role_policy import derive_active_roles, validate_mode_config
+from .views import build_role_view
+from .messaging import send_message as _send_message, broadcast as _broadcast, read_inbox as _read_inbox, serialize_message as _serialize_message
+from .start_position import default_start_position as _default_start_position, is_legal_start_tile as _is_legal_start_tile
+from captain_sonar.possible_actions import possible_actions_for_role
+from captain_sonar.api import snapshot_game_state
+from .strategy import select_strategy
+from .prompt_bootstrap import bootstrap_prompts
 
 
 class TeamAgentManager:
@@ -47,6 +39,7 @@ class TeamAgentManager:
     def __init__(self, team: str, config: AgentManagerConfig | None = None) -> None:
         self.team = team
         self.config = config or AgentManagerConfig()
+        validate_mode_config(self.config)
         self._agents: dict[AgentRole, AgentBase] = {}
         self._active_roles: set[AgentRole] = set()
         self._inbox: dict[AgentRole, list[AgentMessage]] = {role: [] for role in AgentRole}
@@ -59,6 +52,10 @@ class TeamAgentManager:
         self._turn_action_proposals: dict[AgentRole, dict[str, Any]] = {}
         self._turn_action_votes: dict[str, set[AgentRole]] = {}
         self._start_position_picker: StartPositionPicker | None = None
+        self._turn_iterations: list[dict[str, Any]] = []
+        self._last_execution_record: dict[str, Any] | None = None
+        self._strategy_profile: dict[str, Any] | None = None
+        self._role_prompts: dict[str, str] = {}
 
     @property
     def agents(self) -> Mapping[AgentRole, AgentBase]:
@@ -68,18 +65,76 @@ class TeamAgentManager:
     def active_roles(self) -> set[AgentRole]:
         return set(self._active_roles)
 
+    @property
+    def ledger_base_path(self) -> Path:
+        """Return the resolved ledger base path used by this manager.
+
+        If a path was configured in `AgentManagerConfig.ledger_base_path`, that
+        path is returned; otherwise the default `src/agents/common` directory
+        is used.
+        """
+        base = (
+            Path(self.config.ledger_base_path)
+            if getattr(self.config, "ledger_base_path", None)
+            else Path(__file__).resolve().parent.parent / "common"
+        )
+        return base
+
+    @property
+    def ledgers_enabled(self) -> bool:
+        """Return True if ledgers are enabled for this manager instance."""
+        return not getattr(self.config, "disable_ledgers", False)
+
+    def print_ledger_info(self, *, verbose: bool = False) -> str:
+        """Return a short summary of ledger configuration for debugging.
+
+        If `verbose` True, include the resolved path and enabled flag.
+        """
+        base = self.ledger_base_path
+        enabled = self.ledgers_enabled
+        summary = f"ledger_base_path={base}\nledgers_enabled={enabled}"
+        if verbose:
+            # include current proposals/votes counts for quick inspection
+            summary += f"\nactive_roles={[r.value for r in sorted(self._active_roles, key=lambda v: v.value)]}"
+            summary += f"\nproposals={list(self._turn_action_proposals.keys())}"
+        return summary
+
+    def disable_ledgers(self) -> None:
+        """Disable ledger writes at runtime for this manager instance."""
+        setattr(self.config, "disable_ledgers", True)
+
+    def enable_ledgers(self) -> None:
+        """Enable ledger writes at runtime for this manager instance."""
+        setattr(self.config, "disable_ledgers", False)
+
     def register_agent(self, agent: AgentBase, active: bool = True) -> None:
         if agent.team != self.team:
             raise ValueError(f"agent team {agent.team!r} does not match manager team {self.team!r}")
         self._agents[agent.role] = agent
         if active:
             self._active_roles.add(agent.role)
+        self._active_roles = derive_active_roles(
+            config=self.config,
+            registered_roles=set(self._agents),
+            requested_roles=self._active_roles,
+            strict=False,
+        )
 
     def set_active_roles(self, roles: Iterable[AgentRole]) -> None:
-        self._active_roles = {role for role in roles if role in self._agents}
+        self._active_roles = derive_active_roles(
+            config=self.config,
+            registered_roles=set(self._agents),
+            requested_roles=roles,
+            strict=True,
+        )
 
     def activate_all_registered(self) -> None:
-        self._active_roles = set(self._agents)
+        self._active_roles = derive_active_roles(
+            config=self.config,
+            registered_roles=set(self._agents),
+            requested_roles=None,
+            strict=True,
+        )
 
     def set_start_position_picker(self, picker: StartPositionPicker | None) -> None:
         self._start_position_picker = picker
@@ -93,8 +148,7 @@ class TeamAgentManager:
         if self._start_position_picker is not None:
             return self._start_position_picker(self.team, map_data, confirmed)
 
-        default = self._default_start_position(map_data, confirmed)
-        return default
+        return _default_start_position(self, map_data, confirmed)
 
     def activate_agents(
         self,
@@ -104,8 +158,12 @@ class TeamAgentManager:
         until_actions_chosen: bool = True,
     ) -> None:
         """Activate a subset of agents for a turn window."""
-        selected_roles = set(self._agents) if roles is None else {role for role in roles if role in self._agents}
-        self._active_roles = selected_roles
+        self._active_roles = derive_active_roles(
+            config=self.config,
+            registered_roles=set(self._agents),
+            requested_roles=roles,
+            strict=True,
+        )
         self.begin_turn(state)
         window_ms = self.config.activation_duration_ms if duration_ms is None else max(0, duration_ms)
         self._activation_deadline_ms = self._now_ms() + window_ms if window_ms > 0 else None
@@ -133,9 +191,39 @@ class TeamAgentManager:
         self._pair_counts.clear()
         for role in self._inbox:
             self._inbox[role].clear()
+        # Ensure we have selected a strategy and bootstrapped starting prompts
+        # before the first turn begins.
+        if self._strategy_profile is None and getattr(state, "turn", 0) == 0:
+            try:
+                self._strategy_profile = select_strategy(self.team, state.map_data, self.config.operating_mode, getattr(self.config, "strategy_profile", None))
+                role_names = [r.value for r in self._agents]
+                self._role_prompts = bootstrap_prompts(self.team, role_names, self._strategy_profile, self.config.operating_mode)
+                # deliver starting prompts as an augmented observation for active agents
+                for role, agent in self._agents.items():
+                    if role not in self._active_roles:
+                        continue
+                    view = self._build_role_view(role)
+                    prompt = self._role_prompts.get(role.value)
+                    if prompt:
+                        view = dict(view)
+                        view["starting_prompt"] = prompt
+                    try:
+                        agent.observe(view)
+                    except Exception:
+                        continue
+            except Exception:
+                # strategy selection must not crash game startup
+                self._strategy_profile = None
+                self._role_prompts = {}
 
     def observe(self, state: GameState) -> None:
         """Push the current team snapshot to all active agents."""
+        self._active_roles = derive_active_roles(
+            config=self.config,
+            registered_roles=set(self._agents),
+            requested_roles=self._active_roles,
+            strict=True,
+        )
         self.begin_turn(state)
         if self._active_roles and self._activation_deadline_ms is None:
             self._write_turn_actions_ledger(status="active")
@@ -196,6 +284,8 @@ class TeamAgentManager:
         """Return the current turn-action ledger state."""
         return {
             "turn_id": self._turn_id,
+            "operating_mode": self.config.operating_mode.value,
+            "human_role": self.config.human_role.value if self.config.human_role is not None else None,
             "active_roles": [role.value for role in sorted(self._active_roles, key=lambda value: value.value)],
             "activation_deadline_ms": self._activation_deadline_ms,
             "activation_until_actions_chosen": self._activation_until_actions_chosen,
@@ -216,45 +306,13 @@ class TeamAgentManager:
         text: str,
         metadata: dict[str, Any] | None = None,
     ) -> bool:
-        """Send a bounded message between roles or broadcast to all active roles."""
-        if sender not in self._agents:
-            return False
-        if len(text) > self.config.max_message_length:
-            return False
-        if len(self._messages_this_turn) >= self.config.max_messages_per_turn:
-            return False
-
-        message = AgentMessage(
-            sender=sender,
-            recipient=recipient,
-            turn_id=self._turn_id,
-            text=text,
-            metadata=dict(metadata or {}),
-        )
-
-        if recipient is None:
-            recipients = [role for role in self._active_roles if role != sender]
-        else:
-            recipients = [recipient] if recipient in self._agents else []
-
-        delivered = False
-        for role in recipients:
-            pair_key = (sender, role)
-            if self._pair_counts.get(pair_key, 0) >= self.config.max_messages_per_pair_per_turn:
-                continue
-            self._pair_counts[pair_key] = self._pair_counts.get(pair_key, 0) + 1
-            self._inbox[role].append(message)
-            delivered = True
-
-        if delivered:
-            self._messages_this_turn.append(message)
-        return delivered
+        return _send_message(self, sender, recipient, text, metadata)
 
     def broadcast(self, sender: AgentRole, text: str, metadata: dict[str, Any] | None = None) -> bool:
-        return self.send_message(sender, None, text, metadata)
+        return _broadcast(self, sender, text, metadata)
 
     def read_inbox(self, role: AgentRole) -> list[dict[str, Any]]:
-        return [self._serialize_message(message) for message in self._inbox.get(role, [])]
+        return _read_inbox(self, role)
 
     def collect_actions(self, deadline_ms: int) -> dict[AgentRole, dict[str, Any]]:
         actions: dict[AgentRole, dict[str, Any]] = {}
@@ -264,6 +322,88 @@ class TeamAgentManager:
             actions[role] = agent.act(deadline_ms)
         return actions
 
+    def execute_turn_actions(self, state: GameState, intents: list[dict[str, Any]]) -> dict[str, Any]:
+        """Validate accepted intents and execute the resulting team actions."""
+        prepared_intents: list[dict[str, Any]] = []
+        for intent in intents:
+            intent_data = dict(intent)
+            intent_data.setdefault("turn_id", self._turn_id)
+            prepared_intents.append(intent_data)
+
+        adapter = ManagerGameApiAdapter(
+            team=self.team,
+            active_roles=set(self._active_roles),
+            turn_id=self._turn_id,
+        )
+        record: ExecutionRecord = adapter.execute_turn_actions(state, prepared_intents)
+        record_dict = asdict(record)
+        self._last_execution_record = record_dict
+        return record_dict
+
+    def get_strategy_profile(self) -> dict[str, Any] | None:
+        """Return the selected strategy profile for this manager, if any."""
+        return dict(self._strategy_profile) if self._strategy_profile is not None else None
+
+    def get_role_prompt(self, role: AgentRole) -> str | None:
+        """Return the starting prompt for the given role, if available."""
+        return self._role_prompts.get(role.value)
+
+    def get_state_snapshot(self, state: GameState, turn_id: int | None = None) -> dict[str, Any]:
+        """Return a JSON-friendly snapshot of the provided game state."""
+        return snapshot_game_state(state, turn_id=turn_id)
+
+    def get_possible_actions(self, role: AgentRole, state: GameState | None = None) -> List[dict[str, Any]]:
+        """Return the role-specific possible actions using provided state or last observed view.
+
+        If `state` is provided, build a fresh team view from it; otherwise use the
+        manager's last cached team view.
+        """
+        if state is not None:
+            team_view = get_team_view(state, self.team)
+            role_view = build_role_view(
+                role=role,
+                team_view=team_view,
+                turn_id=state.turn,
+                active_roles=self._active_roles,
+                inbox_reader=self.read_inbox,
+            )
+        else:
+            role_view = self._build_role_view(role)
+
+        return possible_actions_for_role(role.value, role_view)
+
+    def run_turn_cycle(self, state: GameState, deadline_ms: int | None = None, max_iterations: int = 1) -> dict[str, Any]:
+        """Run a bounded proposal/iteration cycle and resolve actions.
+
+        Returns an execution-like report with iteration records and final decisions.
+        Agents are expected to implement `propose_action(team_view)` for proposal stage.
+        """
+        self.begin_turn(state)
+        self.observe(state)
+        iterations = run_iteration_cycle(self, state, max_iterations=max_iterations, deadline_ms=deadline_ms)
+
+        accepted = self.choose_turn_actions()
+        execution = self.execute_turn_actions(state, accepted)
+        record = {"turn_id": state.turn, "iterations": iterations, "accepted": accepted, "execution": execution}
+        # persist iteration record and store a lightweight record for inspection
+        try:
+            if self.ledgers_enabled:
+                base = (
+                    Path(self.config.ledger_base_path)
+                    if getattr(self.config, "ledger_base_path", None)
+                    else Path(__file__).resolve().parent.parent / "common"
+                )
+                write_iteration_ledger(
+                    base_path=base,
+                    turn_id=state.turn,
+                    record=record,
+                )
+        except Exception:
+            # ledger failures should not raise during gameplay
+            pass
+        self._turn_iterations.append(record)
+        return record
+
     def team_view(self) -> dict[str, Any]:
         return dict(self._last_team_view)
 
@@ -271,72 +411,16 @@ class TeamAgentManager:
         return self._build_role_view(role)
 
     def _build_role_view(self, role: AgentRole) -> dict[str, Any]:
-        base_view = dict(self._last_team_view)
-        base_view["role"] = role.value
-        base_view["turn_id"] = self._turn_id
-        base_view["active_roles"] = [item.value for item in sorted(self._active_roles, key=lambda value: value.value)]
-        base_view["inbox"] = self.read_inbox(role)
-
-        if role == AgentRole.FIRST_MATE:
-            return {
-                "role": role.value,
-                "turn": base_view.get("turn"),
-                "team": base_view.get("team"),
-                "own_submarine": base_view.get("own_submarine"),
-                "own_gauges": base_view.get("own_gauges"),
-                "system_utilization": base_view.get("system_utilization"),
-                "last_action_system": base_view.get("last_action_system"),
-                "events": base_view.get("events", []),
-                "inbox": base_view["inbox"],
-                "active_roles": base_view["active_roles"],
-            }
-        if role == AgentRole.ENGINEER:
-            return {
-                "role": role.value,
-                "turn": base_view.get("turn"),
-                "team": base_view.get("team"),
-                "own_submarine": base_view.get("own_submarine"),
-                "engineer_board": base_view.get("engineer_board"),
-                "skip_turns": base_view.get("skip_turns"),
-                "events": base_view.get("events", []),
-                "inbox": base_view["inbox"],
-                "active_roles": base_view["active_roles"],
-            }
-        if role == AgentRole.RADIO_OPERATOR:
-            return {
-                "role": role.value,
-                "turn": base_view.get("turn"),
-                "team": base_view.get("team"),
-                "radio_operator": base_view.get("radio_operator"),
-                "events": base_view.get("events", []),
-                "inbox": base_view["inbox"],
-                "active_roles": base_view["active_roles"],
-            }
-
-        return {
-            "role": role.value,
-            "turn": base_view.get("turn"),
-            "team": base_view.get("team"),
-            "map": base_view.get("map"),
-            "own_submarine": base_view.get("own_submarine"),
-            "own_routes": base_view.get("own_routes"),
-            "own_gauges": base_view.get("own_gauges"),
-            "system_utilization": base_view.get("system_utilization"),
-            "engineer_board": base_view.get("engineer_board"),
-            "radio_operator": base_view.get("radio_operator"),
-            "events": base_view.get("events", []),
-            "inbox": base_view["inbox"],
-            "active_roles": base_view["active_roles"],
-        }
+        return build_role_view(
+            role=role,
+            team_view=self._last_team_view,
+            turn_id=self._turn_id,
+            active_roles=self._active_roles,
+            inbox_reader=self.read_inbox,
+        )
 
     def _serialize_message(self, message: AgentMessage) -> dict[str, Any]:
-        return {
-            "sender": message.sender.value,
-            "recipient": message.recipient.value if message.recipient is not None else None,
-            "turn_id": message.turn_id,
-            "text": message.text,
-            "metadata": dict(message.metadata),
-        }
+        return _serialize_message(self, message)
 
     def _now_ms(self) -> int:
         return int(time.monotonic() * 1000)
@@ -368,47 +452,21 @@ class TeamAgentManager:
         accepted: list[dict[str, Any]] | None = None,
         omitted: list[dict[str, Any]] | None = None,
     ) -> None:
-        active_roles = [role.value for role in sorted(self._active_roles, key=lambda value: value.value)]
-        lines = [
-            "# Turn Actions",
-            "",
-            "This file stores the current turn activation window, action proposals, and the final consensus result.",
-            "",
-            f"## Current Turn",
-            "",
-            f"- turn_id: {self._turn_id}",
-            f"- status: {status}",
-            f"- active_roles: {active_roles}",
-            f"- activation_deadline_ms: {self._activation_deadline_ms}",
-            f"- action_window: {'open' if self.is_activation_active() else 'closed'}",
-            "",
-            "## Proposals",
-            "",
-        ]
-
-        if self._turn_action_proposals:
-            for role, proposal in self._turn_action_proposals.items():
-                lines.append(f"- {role.value}: {proposal}")
-        else:
-            lines.append("- none")
-
-        lines.extend([
-            "",
-            "## Final Decisions",
-            "",
-        ])
-
-        if accepted:
-            for item in accepted:
-                lines.append(f"- accepted: {item}")
-        else:
-            lines.append("- none")
-
-        if omitted:
-            lines.append("")
-            lines.append("## Omitted")
-            lines.append("")
-            for item in omitted:
-                lines.append(f"- omitted: {item}")
-
-        write_turn_actions("\n".join(lines).rstrip() + "\n", base_path=Path(__file__).resolve().parent.parent / "common")
+        if not self.ledgers_enabled:
+            return
+        base = (
+            Path(self.config.ledger_base_path)
+            if getattr(self.config, "ledger_base_path", None)
+            else Path(__file__).resolve().parent.parent / "common"
+        )
+        write_turn_actions_ledger(
+            base_path=base,
+            turn_id=self._turn_id,
+            status=status,
+            active_roles=self._active_roles,
+            activation_deadline_ms=self._activation_deadline_ms,
+            action_window_open=self.is_activation_active(),
+            turn_action_proposals=self._turn_action_proposals,
+            accepted=accepted,
+            omitted=omitted,
+        )

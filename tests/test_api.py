@@ -3,6 +3,7 @@ from captain_sonar.api import apply_actions, create_game_state, get_engineer_boa
 from captain_sonar.game_state import GameState, SubmarineState
 from captain_sonar.map_loader import MapData
 import json
+import importlib
 import tempfile
 import os
 import sys
@@ -69,6 +70,9 @@ def _import_choose_start_positions(event_queue: Sequence[object] | None = None):
         sys.modules["pygame"] = _make_fake_pygame(event_queue)
     elif "pygame" not in sys.modules:
         sys.modules["pygame"] = types.ModuleType("pygame")
+
+    if "captain_sonar.startup" in sys.modules:
+        del sys.modules["captain_sonar.startup"]
 
     from captain_sonar.startup import choose_start_positions
 

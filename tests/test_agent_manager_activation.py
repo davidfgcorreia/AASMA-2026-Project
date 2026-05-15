@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import pytest
+
 from agents.base import AgentBase, AgentRole
-from agents.manager import AgentManagerConfig, TeamAgentManager
+from agents.manager import AgentManagerConfig, TeamAgentManager, TeamOperatingMode
 from captain_sonar.game_state import GameState, SubmarineState
 from captain_sonar.map_loader import MapData
 
@@ -61,3 +63,57 @@ def test_majority_omits_non_consensus_actions() -> None:
     accepted = manager.choose_turn_actions()
 
     assert accepted == []
+
+
+def test_full_team_mode_activates_all_registered_roles() -> None:
+    manager = TeamAgentManager(
+        "BLUE",
+        config=AgentManagerConfig(operating_mode=TeamOperatingMode.FULL_TEAM),
+    )
+    manager.register_agent(DummyAgent("BLUE", AgentRole.CAPTAIN), active=False)
+    manager.register_agent(DummyAgent("BLUE", AgentRole.FIRST_MATE), active=False)
+    manager.register_agent(DummyAgent("BLUE", AgentRole.ENGINEER), active=False)
+    manager.register_agent(DummyAgent("BLUE", AgentRole.RADIO_OPERATOR), active=False)
+    state = _build_state()
+
+    manager.activate_agents(state)
+
+    assert manager.active_roles == {
+        AgentRole.CAPTAIN,
+        AgentRole.FIRST_MATE,
+        AgentRole.ENGINEER,
+        AgentRole.RADIO_OPERATOR,
+    }
+
+
+def test_three_agent_mode_disables_configured_role() -> None:
+    manager = TeamAgentManager(
+        "BLUE",
+        config=AgentManagerConfig(
+            operating_mode=TeamOperatingMode.THREE_AGENT,
+        ),
+    )
+    manager.register_agent(DummyAgent("BLUE", AgentRole.FIRST_MATE), active=False)
+    manager.register_agent(DummyAgent("BLUE", AgentRole.ENGINEER), active=False)
+    manager.register_agent(DummyAgent("BLUE", AgentRole.RADIO_OPERATOR), active=False)
+    state = _build_state()
+
+    manager.activate_agents(state, roles=[AgentRole.FIRST_MATE])
+
+    assert manager.active_roles == {
+        AgentRole.FIRST_MATE,
+        AgentRole.ENGINEER,
+        AgentRole.RADIO_OPERATOR,
+    }
+    assert AgentRole.CAPTAIN not in manager.active_roles
+
+
+def test_three_agent_mode_rejects_non_captain_human_role() -> None:
+    with pytest.raises(ValueError, match="human role"):
+        TeamAgentManager(
+            "BLUE",
+            config=AgentManagerConfig(
+                operating_mode=TeamOperatingMode.THREE_AGENT,
+                human_role=AgentRole.ENGINEER,
+            ),
+        )

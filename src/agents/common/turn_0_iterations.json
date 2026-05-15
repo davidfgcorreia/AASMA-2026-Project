@@ -1,0 +1,94 @@
+{
+  "iterations": [
+    {
+      "iteration": 0,
+      "proposals": {
+        "first_mate": {
+          "type": "MOVE",
+          "payload": {
+            "direction": "N"
+          }
+        },
+        "captain": {
+          "type": "MOVE",
+          "payload": {
+            "direction": "N"
+          }
+        }
+      },
+      "inbox": {
+        "first_mate": [],
+        "captain": []
+      }
+    }
+  ],
+  "accepted": [
+    {
+      "role": "first_mate",
+      "type": "MOVE",
+      "payload": {
+        "direction": "N"
+      }
+    },
+    {
+      "role": "captain",
+      "type": "MOVE",
+      "payload": {
+        "direction": "N"
+      }
+    }
+  ],
+  "execution": {
+    "turn_id": 0,
+    "accepted_intents": [
+      {
+        "role": "first_mate",
+        "type": "MOVE",
+        "payload": {
+          "direction": "N"
+        },
+        "turn_id": 0
+      },
+      {
+        "role": "captain",
+        "type": "MOVE",
+        "payload": {
+          "direction": "N"
+        },
+        "turn_id": 0
+      }
+    ],
+    "executed_actions": [
+      {
+        "actor": "BLUE",
+        "type": "MOVE",
+        "payload": {
+          "direction": "N"
+        }
+      }
+    ],
+    "rejected_intents": [],
+    "events": [
+      {
+        "type": "breakdown",
+        "actor": "BLUE",
+        "direction": "N",
+        "button_id": "N-not-green-0",
+        "circuit_part": "not",
+        "function_type": "green"
+      },
+      {
+        "type": "move",
+        "actor": "BLUE",
+        "direction": "N",
+        "to": [
+          1,
+          0
+        ],
+        "charge": "torpedo"
+      }
+    ],
+    "success": true,
+    "errors": []
+  }
+}
