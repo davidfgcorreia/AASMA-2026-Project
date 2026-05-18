@@ -1,0 +1,12 @@
+{
+  "model": "llama-3.1-8b-instant",
+  "prompt_file": "dev_prompt.md",
+  "context_file": "contex2.md",
+  "system_instruction_file": "dev_system_instruction.md",
+  "output_file": "dev_output.md",
+  "temperature": 0.2,
+  "max_output_tokens": 1024,
+  "top_p": 0.95,
+  "top_k": 40,
+  "timeout_seconds": 60.0
+}
