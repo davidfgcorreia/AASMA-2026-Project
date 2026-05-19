@@ -253,6 +253,7 @@ def get_engineer_board_state(state: GameState, team: str) -> dict[str, Any] | No
 def get_team_view(state: GameState, team: str) -> dict[str, Any]:
     enemy_team = next((name for name in state.subs if name != team), None)
     radio_operator = state.get_radio_operator(team)
+    own_mines = [mine for mine in state.mines if mine.owner == team]
     return {
         "team": team,
         "enemy_team": enemy_team,
@@ -267,6 +268,7 @@ def get_team_view(state: GameState, team: str) -> dict[str, Any]:
             for x, y in state.trajectory.get(team, [])
         ],
         "own_gauges": get_gauges(state, team),
+        "own_mines": [{"x": mine.x, "y": mine.y} for mine in own_mines],
         "system_utilization": get_system_utilization(state, team),
         # Provide a minimal engineer board in the team view to avoid
         # shipping the full UI button metadata every time.

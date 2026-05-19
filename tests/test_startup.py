@@ -202,13 +202,34 @@ def test_main_forwards_play_types_path(monkeypatch, tmp_path):
             {
                 "map": "assets/maps/default_map.json",
                 "log": str(tmp_path / "game_log.jsonl"),
+                "state_log": str(tmp_path / "game_state_snapshots.jsonl"),
                 "seed": 1337,
                 "two_human": True,
                 "ai_red": False,
                 "play_types": str(play_types_path),
                 "start": None,
+                "log_turn_starts": True,
+                "possible_actions_log": str(tmp_path / "game_possible.jsonl"),
             },
         )()
+
+    class DummyEventLogger:
+        def __init__(self, path, state_path=None, turn_start_log=False, possible_actions_path=None):
+            captured["event_logger_kwargs"] = {
+                "path": path,
+                "state_path": state_path,
+                "turn_start_log": turn_start_log,
+                "possible_actions_path": possible_actions_path,
+            }
+
+        def log_header(self, *_args, **_kwargs):
+            return None
+
+        def log_turn(self, *_args, **_kwargs):
+            return None
+
+        def log_state_snapshot(self, *_args, **_kwargs):
+            return None
 
     class DummyRenderer:
         def __init__(self, *args, **kwargs):
@@ -226,6 +247,7 @@ def test_main_forwards_play_types_path(monkeypatch, tmp_path):
         return {"BLUE": SubmarineState(x=1, y=1), "RED": SubmarineState(x=4, y=3)}
 
     monkeypatch.setattr(main_module, "parse_args", fake_parse_args)
+    monkeypatch.setattr(main_module, "EventLogger", DummyEventLogger)
     monkeypatch.setattr(main_module, "Renderer", DummyRenderer)
     monkeypatch.setattr(main_module, "GameLoop", DummyGameLoop)
     monkeypatch.setattr(main_module, "choose_start_positions", fake_choose_start_positions)
@@ -236,5 +258,8 @@ def test_main_forwards_play_types_path(monkeypatch, tmp_path):
     main_module.main()
 
     assert captured["play_types_path"] == str(play_types_path)
+    assert captured["event_logger_kwargs"]["turn_start_log"] is True
+    assert captured["event_logger_kwargs"]["state_path"] == str(tmp_path / "game_state_snapshots.jsonl")
+    assert captured["event_logger_kwargs"]["possible_actions_path"] == str(tmp_path / "game_possible.jsonl")
     assert captured["game_loop_kwargs"]["team_play_types"]["BLUE"] == "human"
     assert captured["game_loop_kwargs"]["team_play_types"]["RED"] == "agent"

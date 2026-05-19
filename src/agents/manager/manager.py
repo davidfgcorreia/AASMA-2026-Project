@@ -73,11 +73,11 @@ class TeamAgentManager:
         path is returned; otherwise the default `src/agents/common` directory
         is used.
         """
-        base = (
-            Path(self.config.ledger_base_path)
-            if getattr(self.config, "ledger_base_path", None)
-            else Path(__file__).resolve().parent.parent / "common"
-        )
+        ledger_path = getattr(self.config, "ledger_base_path", None)
+        if ledger_path is not None:
+            base = Path(ledger_path)
+        else:
+            base = Path(__file__).resolve().parent.parent / "common"
         return base
 
     @property
@@ -388,11 +388,11 @@ class TeamAgentManager:
         # persist iteration record and store a lightweight record for inspection
         try:
             if self.ledgers_enabled:
-                base = (
-                    Path(self.config.ledger_base_path)
-                    if getattr(self.config, "ledger_base_path", None)
-                    else Path(__file__).resolve().parent.parent / "common"
-                )
+                ledger_path = getattr(self.config, "ledger_base_path", None)
+                if ledger_path is not None:
+                    base = Path(ledger_path)
+                else:
+                    base = Path(__file__).resolve().parent.parent / "common"
                 write_iteration_ledger(
                     base_path=base,
                     turn_id=state.turn,
@@ -454,11 +454,11 @@ class TeamAgentManager:
     ) -> None:
         if not self.ledgers_enabled:
             return
-        base = (
-            Path(self.config.ledger_base_path)
-            if getattr(self.config, "ledger_base_path", None)
-            else Path(__file__).resolve().parent.parent / "common"
-        )
+        ledger_path = getattr(self.config, "ledger_base_path", None)
+        if ledger_path is not None:
+            base = Path(ledger_path)
+        else:
+            base = Path(__file__).resolve().parent.parent / "common"
         write_turn_actions_ledger(
             base_path=base,
             turn_id=self._turn_id,

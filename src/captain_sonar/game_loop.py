@@ -6,6 +6,8 @@ import pygame
 from agents.manager import TeamAgentManager
 
 from .actions import Action, ActionType, order_actions
+from .api import get_team_view
+from .possible_actions import possible_actions_for_role
 from .config import DEFAULT_SEED, FPS
 from .event_log import EventLogger
 from .game_state import GameState
@@ -51,9 +53,29 @@ class GameLoop:
         self.belief_blue = BeliefTracker(state.map_data, own_team="BLUE")  # Blue's belief about Red
         self.belief_red = BeliefTracker(state.map_data, own_team="RED")    # Red's belief about Blue
         self.sonar_modal = SonarResponseModal(state)
+        self._last_turn_start_logged: tuple[int, str] | None = None
         if self.logger:
             subs = {team: {"x": sub.x, "y": sub.y} for team, sub in state.subs.items()}
             self.logger.log_header({"map": map_name, "seed": seed, "teams": list(state.subs.keys()), "subs": subs})
+
+    def _record_turn(self, actions: list[Action], acting_team: str) -> None:
+        if not self.logger:
+            return
+        self.logger.log_turn(self.state.turn, actions, self.state.events)
+
+    def _log_turn_start(self, team: str, phase: str) -> None:
+        if not self.logger or phase != "move" or self.state.skip_turns.get(team, 0) > 0:
+            return
+        key = (self.state.turn, team)
+        if self._last_turn_start_logged == key:
+            return
+        team_view = get_team_view(self.state, team)
+        self.logger.log_team_view(self.state.turn, team, team_view)
+        self.logger.log_turn_start(self.state.turn, team, phase)
+        team_view = get_team_view(self.state, team)
+        possible_actions = possible_actions_for_role("captain", team_view)
+        self.logger.log_possible_actions(self.state.turn, team, phase, "captain", possible_actions)
+        self._last_turn_start_logged = key
 
     def run(self) -> None:
         running = True
@@ -62,6 +84,7 @@ class GameLoop:
         while running:
             active_controller = self.human_blue if active_team == "BLUE" else self.human_red
             active_phase = phase_by_team.get(active_team, "move")
+            self._log_turn_start(active_team, active_phase)
 
             if self.sonar_modal.active:
                 waiting_team = self.sonar_modal.waiting_team
@@ -77,8 +100,7 @@ class GameLoop:
                             self.state.apply_actions([committed_action])
                             self.belief_blue.update(self.state.events)
                             self.belief_red.update(self.state.events)
-                            if self.logger:
-                                self.logger.log_turn(self.state.turn, [committed_action], self.state.events)
+                            self._record_turn([committed_action], attacker_team)
                             phase_by_team[attacker_team] = "move"
                             active_team = self._other_team(attacker_team)
                             break
@@ -121,16 +143,14 @@ class GameLoop:
                         self.state.apply_actions(actions)
                         self.belief_blue.update(self.state.events)
                         self.belief_red.update(self.state.events)
-                        if self.logger:
-                            self.logger.log_turn(self.state.turn, actions, self.state.events)
+                        self._record_turn(actions, active_team)
                         phase_by_team[active_team] = "move"
                         active_team = "RED" if active_team == "BLUE" else "BLUE"
                     else:
                         self.state.apply_actions(actions)
                         self.belief_blue.update(self.state.events)
                         self.belief_red.update(self.state.events)
-                        if self.logger:
-                            self.logger.log_turn(self.state.turn, actions, self.state.events)
+                        self._record_turn(actions, active_team)
                         phase_by_team[active_team] = "system"
                 else:
                     if sonar_action is not None and not self._is_agent_team(self._other_team(active_team)):
@@ -139,8 +159,7 @@ class GameLoop:
                         self.state.apply_actions(actions)
                         self.belief_blue.update(self.state.events)
                         self.belief_red.update(self.state.events)
-                        if self.logger:
-                            self.logger.log_turn(self.state.turn, actions, self.state.events)
+                        self._record_turn(actions, active_team)
                     phase_by_team[active_team] = "move"
                     active_team = "RED" if active_team == "BLUE" else "BLUE"
                 continue
@@ -159,6 +178,7 @@ class GameLoop:
                 self.state.apply_actions([])
                 self.belief_blue.update(self.state.events)
                 self.belief_red.update(self.state.events)
+                self._record_turn([], active_team)
                 if active_controller is not None:
                     active_controller.reset_turn()
                 self.state.skip_turns[active_team] = max(0, self.state.skip_turns.get(active_team, 0) - 1)
@@ -175,8 +195,7 @@ class GameLoop:
                         self.state.apply_actions(actions)
                         self.belief_blue.update(self.state.events)
                         self.belief_red.update(self.state.events)
-                        if self.logger:
-                            self.logger.log_turn(self.state.turn, actions, self.state.events)
+                        self._record_turn(actions, active_team)
                         active_controller.reset_turn()
                         # Surfacing ends the whole turn — skip system phase.
                         if self._team_just_surfaced(active_team):
@@ -204,8 +223,7 @@ class GameLoop:
                             self.state.apply_actions(actions)
                             self.belief_blue.update(self.state.events)
                             self.belief_red.update(self.state.events)
-                            if self.logger:
-                                self.logger.log_turn(self.state.turn, actions, self.state.events)
+                            self._record_turn(actions, active_team)
                             active_controller.reset_turn()
                             phase_by_team[active_team] = "move"
                             active_team = "RED" if active_team == "BLUE" else "BLUE"

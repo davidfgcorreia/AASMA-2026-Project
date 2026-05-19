@@ -92,41 +92,16 @@ def main() -> None:
         provider = result.provider
         response_text = result.response_text
         fallback_note = result.fallback_note
-        fallback_note = result.fallback_note
     except Exception as exc:  # pragma: no cover - keeps failure details in the output file
         error_text = f"{type(exc).__name__}: {exc}"
     finally:
         output_file = config.get("output_file") or "dev_output.md"
-        output_lines = [
-            "# Gemini Dev Run Output",
-            "",
-            f"- model: {model}",
-            f"- provider: {provider}",
-            f"- prompt_file: {config.get('prompt_file') or config.get('prompt') or ''}",
-            f"- context_file: {config.get('context_file') or config.get('context') or ''}",
-            f"- system_instruction_file: {config.get('system_instruction_file') or config.get('system_instruction') or ''}",
-            "",
-            "## Prompt",
-            "",
-            prompt,
-            "",
-            "## Context",
-            "",
-            context,
-            "",
-            "## System Instruction",
-            "",
-            system_instruction,
-            "",
-            "## Response",
-            "",
-            response_text,
-        ]
         if error_text is not None:
-            output_lines.extend(["", "## Error", "", error_text])
+            write_test_output(output_file, error_text, base_path=config_base_path)
+            return
         if fallback_note:
-            output_lines.extend(["", "## Fallback", "", fallback_note])
-        write_test_output(output_file, "\n".join(output_lines), base_path=config_base_path)
+            response_text = f"{response_text.rstrip()}\n\n{fallback_note}".strip()
+        write_test_output(output_file, response_text, base_path=config_base_path)
 
 
 if __name__ == "__main__":

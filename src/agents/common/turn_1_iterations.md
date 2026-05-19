@@ -5,9 +5,6 @@
 
 ## Iteration Summaries
 
-- iteration 0: proposals={captain, engineer, first_mate}
+- iteration 0: proposals={first_mate, radio_operator, engineer, captain}
 
 ## Accepted Decisions
-
-- {'role': 'captain', 'type': 'MOVE', 'payload': {'direction': 'N'}}
-- {'role': 'engineer', 'type': 'MOVE', 'payload': {'direction': 'N'}}

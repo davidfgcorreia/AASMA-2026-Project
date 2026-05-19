@@ -1,8 +1,8 @@
 {
-  "model": "llama-3.1-8b-instant",
-  "prompt_file": "dev_prompt.md",
-  "context_file": "contex2.md",
-  "system_instruction_file": "dev_system_instruction.md",
+  "model": "gemini-3.1-flash-lite",
+  "prompt_file": "../captain/prompts/1_analysis.md",
+  "context_file": "../captain/captain_payload.md",
+  "system_instruction_file": "../captain/system_instruction.md",
   "output_file": "dev_output.md",
   "temperature": 0.2,
   "max_output_tokens": 1024,

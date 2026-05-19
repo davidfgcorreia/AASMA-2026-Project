@@ -493,6 +493,10 @@ def _filter_activations_by_engineer_button(possible_activations: list[str], func
 def _system_activation_options(team_view: dict[str, Any], x: int, y: int, load_system: str) -> list[str | dict[str, Any]]:
     options: list[str | dict[str, Any]] = [NONE_VALUE]
     blocked_systems = _get_blocked_systems(team_view)
+    has_own_mines = False
+    own_mines = team_view.get("own_mines")
+    if isinstance(own_mines, list) and own_mines:
+        has_own_mines = True
 
     if _system_can_activate(team_view, "torpedo", load_system) and "torpedo" not in blocked_systems:
         torpedo_targets = [{"x": tx, "y": ty} for tx, ty in _orthogonal_targets(x, y, team_view)]
@@ -513,7 +517,7 @@ def _system_activation_options(team_view: dict[str, Any], x: int, y: int, load_s
         ]
         if silence_coordinates:
             options.append({"type": "silence", "payload": {"coordinates": silence_coordinates}})
-    if _system_allowed(team_view, "trigger_mine") and "trigger_mine" not in blocked_systems:
+    if has_own_mines and _system_allowed(team_view, "trigger_mine") and "trigger_mine" not in blocked_systems:
         options.append({"type": "trigger_mine", "payload": {"target": {"x": x, "y": y}}})
     if _system_allowed(team_view, "repair"):
         options.append("repair")

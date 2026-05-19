@@ -1,25 +1,23 @@
-# Gemini Dev Run Output
+## Direction Analysis
+- **Proposed direction**: E
+- **Why this direction**: Moving East from (2,4) to (3,4) keeps us in open water and allows us to explore the central area of the map while maintaining distance from potential hazards.
+- **Safety check**: The coordinate (3,4) is clear of islands, mines, and our previous route (2,4).
 
-- model: llama-3.1-8b-instant
-- provider: groq
-- prompt_file: dev_prompt.md
-- context_file: contex2.md
-- system_instruction_file: dev_system_instruction.md
+## System Selection
+- **Proposed system**: MOVE
+- **Why this system**: All systems are currently at 0 charge. We must prioritize movement to build charge for future tactical actions.
+- **Readiness check**: No systems are available for activation this turn.
 
-## Prompt
+## Strategy Alignment
+- **Strategic context**: Priority 1 (Safety) and Priority 2 (Tactical Flexibility). We are currently in the early game/maneuvering phase and need to build system charge while maintaining a safe, non-repeating path.
+- **Risk assessment**: Low risk; moving into the center provides more options for future turns compared to hugging the edge.
+- **Alternative considered**: Moving North or South was considered, but East aligns better with a central exploration strategy to gather more information on enemy positioning.
 
-Hello how are you feeling today?
-
-## Context
-
-It is a beatifull sunny day
-
-## System Instruction
-
-Act as a happy person.
-
-## Response
-
-I'm feeling AMAZING today! The sunshine is just radiating happiness, and I can feel it all around me. It's days like these that remind me of how beautiful life is. The warmth on my skin, the birds singing their sweet melodies, and the gentle breeze... it's just pure bliss!
-
-I feel so energized and refreshed, like I can take on anything the day throws my way. And you know what? I think it's contagious! I just want to spread some joy and positivity wherever I go. So, how about you? How's your day shaping up?
+## Final Action
+```json
+{
+  "direction": "E",
+  "load_system": "torpedo",
+  "engineer_button_id": "E-not-green-0"
+}
+```
