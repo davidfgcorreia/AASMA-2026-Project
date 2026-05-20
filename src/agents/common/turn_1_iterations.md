@@ -5,6 +5,6 @@
 
 ## Iteration Summaries
 
-- iteration 0: proposals={first_mate, radio_operator, engineer, captain}
+- iteration 0: proposals={radio_operator, engineer, first_mate, captain}
 
 ## Accepted Decisions

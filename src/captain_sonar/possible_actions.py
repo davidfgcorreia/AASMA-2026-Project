@@ -133,13 +133,19 @@ def _captain_actions(team_view: dict[str, Any], catalog: list[dict[str, Any]]) -
                 {
                     "load_system": load_system,
                     "engineer_picks": [
-                        {
-                            **engineer_selection,
-                            "system_to_load": load_system,
-                            "possible_activations": _filter_activations_by_engineer_button(
-                                possible_activations, engineer_selection.get("function_type")
-                            ),
-                        }
+                        (
+                            lambda sel: {
+                                **sel,
+                                "system_to_load": load_system,
+                                "possible_activations": (
+                                    lambda acts: acts if acts else [NONE_VALUE]
+                                )(
+                                    _filter_activations_by_engineer_button(
+                                        possible_activations, sel.get("function_type")
+                                    )
+                                ),
+                            }
+                        )(engineer_selection)
                         for engineer_selection in engineer_options
                     ],
                 }
@@ -153,17 +159,28 @@ def _captain_actions(team_view: dict[str, Any], catalog: list[dict[str, Any]]) -
                 }
             )
 
-    actions: list[dict[str, Any]] = [
-        {
-            "action_kind": ActionType.MOVE.value,
-            "directions": move_directions,
-        },
-        {
-            "action_kind": ActionType.SURFACE.value,
-            "engineer_picks": [NONE_VALUE],
-            "system_hypotheses": [NONE_VALUE],
-        },
-    ]
+    # If there are no move directions available (for example all engineer picks
+    # are blocked or no clear direction), do not offer MOVE — only allow SURFACE.
+    if not move_directions:
+        actions: list[dict[str, Any]] = [
+            {
+                "action_kind": ActionType.SURFACE.value,
+                "engineer_picks": [NONE_VALUE],
+                "system_hypotheses": [NONE_VALUE],
+            }
+        ]
+    else:
+        actions = [
+            {
+                "action_kind": ActionType.MOVE.value,
+                "directions": move_directions,
+            },
+            {
+                "action_kind": ActionType.SURFACE.value,
+                "engineer_picks": [NONE_VALUE],
+                "system_hypotheses": [NONE_VALUE],
+            },
+        ]
 
     return actions
 

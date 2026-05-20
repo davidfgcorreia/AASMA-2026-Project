@@ -283,7 +283,6 @@ class GameLoop:
                 ActionType.DRONE,
                 ActionType.MINE,
                 ActionType.TRIGGER_MINE,
-                ActionType.REPAIR,
             }
         )
 
@@ -335,7 +334,6 @@ class GameLoop:
             ActionType.DRONE,
             ActionType.MINE,
             ActionType.TRIGGER_MINE,
-            ActionType.REPAIR,
         )
 
     def _can_start_sonar_response(self, team: str) -> bool:

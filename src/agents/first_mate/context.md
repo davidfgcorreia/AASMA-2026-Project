@@ -10,14 +10,16 @@ The First Mate manages gauges and system readiness for the team.
 - When a gauge fills, the system becomes ready.
 - The First Mate must inform the Captain when a system is ready.
 - The First Mate can activate drone and sonar.
-- The Captain activates most other systems, including torpedo, mine, silence, surface, and scenario.
+- The Captain activates most other systems, including torpedo, mine, silence, surface
 
-## Strategy Notes
+## Systems Quick Reference
 
-- Keep the most useful systems charged for the current tactical state.
-- Favor torpedo and sonar when the enemy position is unclear.
-- Favor mine and silence when stealth matters.
-- Avoid wasting charge on low-value systems.
+- Torpedo: direct attack system used to damage the enemy when a target is credible. can launched to a specific sector or in a straight line 4 blocks. 
+- Mine: trap system deployed next to the submarine can be activated to damage nearby enemies.
+- Sonar: information system used to narrow enemy position uncertainty.
+- Drone: sector-check system used to check if enemy is on that sector.
+- Silence: stealth movement system that hides path details and breaks enemy tracking.
+
 
 ## Action Priorities
 

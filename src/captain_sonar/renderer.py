@@ -660,7 +660,6 @@ class Renderer:
                 f"{silence_hint}",
                 "T torpedo | O sonar",
                 "V drone | M mine | G trigger",
-                "R repair",
                 "Space/click queue selected system",
                 "Enter confirm (or skip with empty queue)",
                 "P engineer board",

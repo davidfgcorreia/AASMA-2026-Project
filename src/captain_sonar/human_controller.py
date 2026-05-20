@@ -121,10 +121,6 @@ class HumanController:
         if key == pygame.K_c:
             self._queue_surface()
             return True
-        if key == pygame.K_r:
-            self.active_action = ActionType.REPAIR
-            self._queue_repair()
-            return True
         if key == pygame.K_SPACE:
             self._queue_active()
             return True

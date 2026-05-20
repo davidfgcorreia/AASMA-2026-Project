@@ -61,7 +61,13 @@ def main() -> None:
     args = parse_args()
     config = load_run_config(args.config)
     config_base_path = Path(args.config).resolve().parent
-    prompt = args.prompt if args.prompt is not None else read_text_file(config.get("prompt_file") or config.get("prompt"))
+    # Resolve the prompt path relative to the config file directory so agent-specific
+    # run configs (e.g. src/agents/first_mate/dev_run.json) work when they reference
+    # local prompt files using relative paths.
+    prompt = args.prompt if args.prompt is not None else read_text_file(
+        config.get("prompt_file") or config.get("prompt"),
+        base_path=config_base_path,
+    )
     if not isinstance(prompt, str) or not prompt.strip():
         raise ValueError("Set a non-empty prompt file in the run config or pass --prompt")
 
