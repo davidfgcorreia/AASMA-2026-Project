@@ -7,7 +7,7 @@ from captain_sonar.game_state import GameState, SubmarineState
 from captain_sonar.map_loader import load_map
 
 from ..captain.agent import CaptainAgent, ModelCaptainAgent
-from ..engineer.agent import EngineerAgent
+from ..engineer.agent import EngineerAgent, ModelEngineerAgent
 from ..first_mate.agent import FirstMateAgent, ModelFirstMateAgent
 from ..radio_operator.agent import RadioOperatorAgent
 from .manager import TeamAgentManager
@@ -26,9 +26,11 @@ def build_team_agent_manager(
     captain = ModelCaptainAgent(team) if use_model_agents else CaptainAgent(team)
     first_mate = ModelFirstMateAgent(team) if use_model_agents else FirstMateAgent(team)
 
+    engineer = ModelEngineerAgent(team) if use_model_agents else EngineerAgent(team)
+
     manager.register_agent(captain, active=True)
     manager.register_agent(first_mate, active=True)
-    manager.register_agent(EngineerAgent(team), active=True)
+    manager.register_agent(engineer, active=True)
     manager.register_agent(RadioOperatorAgent(team), active=True)
     return manager
 

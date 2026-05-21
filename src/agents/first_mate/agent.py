@@ -33,12 +33,22 @@ def _preferred_system(team_view: dict[str, object]) -> str:
     return "torpedo"
 
 
+def _system_is_ready(system: str, team_view: dict[str, object]) -> bool:
+    ready = team_view.get("system_utilization", {}).get("ready", {})
+    return bool(isinstance(ready, dict) and ready.get(system, False))
+
+
 def _build_load_action(system: str, team_view: dict[str, object]) -> dict[str, object]:
     possible_actions = possible_actions_for_role("first_mate", team_view)
+    second_step = (
+        {"type": "ACTIVATE", "payload": {"system": system}}
+        if _system_is_ready(system, team_view)
+        else None
+    )
     return {
         "role": AgentRole.FIRST_MATE.value,
         "first_step": {"type": "CHARGE", "payload": {"system": system}},
-        "second_step": {"type": "ACTIVATE", "payload": {"system": system}},
+        "second_step": second_step,
         "full_action": None,
         "possible_actions": possible_actions,
     }
@@ -77,7 +87,8 @@ class ModelFirstMateAgent(FirstMateAgent):
             candidate_systems = ["torpedo"]
 
         strategy_lock = _read_text("strategy.md")
-        phase_1 = _read_text("prompts", "1_strategy_lock.md")
+        phase_1_prompt = _read_text("prompts", "1_strategy_lock.md")
+        phase_2_prompt = _read_text("prompts", "2_system_selection.md")
 
         # Agent-local files
         agent_memory = _read_text("memory.md")
@@ -104,29 +115,66 @@ class ModelFirstMateAgent(FirstMateAgent):
             parts.append("--- PLAY CONTEXT ---\n" + play_context)
         role_memory_combined = "\n\n".join(parts) if parts else None
 
-        # For now use only the first-phase prompt as the direct task prompt
-        prompt = phase_1
-
         model = os.getenv("GEMINI_MODEL") or "gemini-3.1-flash-lite"
+        inbox = team_view.get("inbox") or []
 
+        selected_system = None
+        reasoning = ""
         try:
-            response = call_agent_activity(
+            # Phase 1: get prose reasoning
+            phase_1_response = call_agent_activity(
                 model=model,
-                prompt=prompt,
+                prompt=phase_1_prompt,
                 team_view=team_view,
                 role=self.role,
                 role_memory=role_memory_combined,
+                message_history=inbox,
                 max_output_tokens=256,
             )
-            parsed = json.loads(response.text.strip())
-            selected_system = None
+            reasoning = phase_1_response.text.strip()
+
+            # Phase 2: feed phase 1 reasoning as context, get JSON decision
+            candidates_line = "candidates: " + ", ".join(candidate_systems)
+            phase_2_extra = f"--- PHASE 1 REASONING ---\n{reasoning}\n\n{candidates_line}"
+            phase_2_role_memory = (role_memory_combined + "\n\n" + phase_2_extra) if role_memory_combined else phase_2_extra
+
+            phase_2_response = call_agent_activity(
+                model=model,
+                prompt=phase_2_prompt,
+                team_view=team_view,
+                role=self.role,
+                role_memory=phase_2_role_memory,
+                message_history=inbox,
+                max_output_tokens=64,
+            )
+
+            # Strip markdown code fences if the model wrapped the JSON
+            text = phase_2_response.text.strip()
+            if text.startswith("```"):
+                text = "\n".join(
+                    line for line in text.splitlines() if not line.startswith("```")
+                ).strip()
+
+            parsed = json.loads(text)
             if isinstance(parsed, dict):
                 raw_system = parsed.get("system") or parsed.get("load_system")
                 if isinstance(raw_system, str):
                     selected_system = raw_system.strip().lower()
             if selected_system not in candidate_systems:
-                raise ValueError("model selected an invalid system")
+                raise ValueError(f"model selected an invalid system: {selected_system!r}")
         except Exception:
             selected_system = _preferred_system(team_view)
 
-        return _build_load_action(selected_system, team_view)
+        return {
+            "role": self.role.value,
+            "type": "END_TURN",
+            "payload": {},
+            "reasoning": reasoning,
+            "messages": [
+                {
+                    "recipient": "captain",
+                    "text": f"Charge {selected_system} next.",
+                    "metadata": {"recommended_system": selected_system},
+                }
+            ],
+        }

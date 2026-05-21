@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\pitne\\\\Documents\\\\ist\\\\2526\\\\p4\\\\aasma\\\\AASMA-2026-Project\" -Force | Select-Object Name, @{Name=\"Type\"; Expression={if \\($_.PSIsContainer\\) { \"Folder\" } else { \"File\" }}} | Format-Table -AutoSize)"
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\pitne\\\\Documents\\\\ist\\\\2526\\\\p4\\\\aasma\\\\AASMA-2026-Project\" -Force | Select-Object Name, @{Name=\"Type\"; Expression={if \\($_.PSIsContainer\\) { \"Folder\" } else { \"File\" }}} | Format-Table -AutoSize)",
+      "Bash(python -m pytest tests/ -q --tb=short --ignore=tests/test_game_state.py --ignore=tests/test_startup.py)",
+      "Bash(python -c ' *)"
     ]
   }
 }

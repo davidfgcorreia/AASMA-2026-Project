@@ -1,168 +1,9 @@
-# Phase 3: Final Action Formulation
+# Phase 3: Final Action JSON
 
-You are the Captain finalizing the team's turn action based on the collaborative discussion and consensus decision.
+Output a single JSON object. No prose, no headers — just the JSON block.
 
-## Task
-Using the consensus decision from Phase 2 (direction and system), formulate the complete, properly-formatted action that the team will execute this turn.
+## Required Fields
 
-## Input Sources
-- Phase 2 consensus decision (direction and system)
-- Current game state (position, status, capabilities)
-- Team action format specification
-- Previous turn actions and results
-
-## Requirements
-1. **Match the consensus direction and system exactly**
-2. **Generate complete action data** (target tiles, parameters, coordination info)
-3. **Verify all parameters are valid** against current game state
-4. **Include rationale** for the chosen action
-5. **Output in the correct JSON/structured format**
-
-## Action Formulation Checklist
-
-### Pre-Action Validation
-- [ ] Direction is cardinal (N/S/E/W)
-- [ ] Load system is valid and available
-- [ ] Engineer button ID follows format: `{direction}-{status}-{number}`
-- [ ] Targets (if applicable) are valid coordinates
-- [ ] Movement doesn't cross own route
-- [ ] Movement doesn't hit islands or own mines
-- [ ] System is not on cooldown
-- [ ] Action respects damage state and current status
-
-### Action Data Specification
-
-All actions follow this core structure:
-
-```json
-{
-  "direction": "N|S|E|W|SURFACE",
-  "load_system": "system_name",
-  "engineer_button_id": "direction-status-number",
-  "activation": {
-    "type": "system_name",
-    "payload": {...}
-  }
-}
-```
-
-**Note:** The `activation` field is optional. Omit it for move-only actions.
-
----
-
-### Torpedo Action
-```json
-{
-  "direction": "N",
-  "load_system": "torpedo",
-  "engineer_button_id": "N-not-green-0",
-  "activation": {
-    "type": "torpedo",
-    "payload": {
-      "targets": [{"x": 5, "y": 3}]
-    }
-  }
-}
-```
-
----
-
-### Mine Action
-```json
-{
-  "direction": "E",
-  "load_system": "mine",
-  "engineer_button_id": "E-green-0",
-  "activation": {
-    "type": "mine",
-    "payload": {
-      "targets": [{"x": 5, "y": 5}]
-    }
-  }
-}
-```
-
----
-
-### Sonar Action
-```json
-{
-  "direction": "S",
-  "load_system": "sonar",
-  "engineer_button_id": "S-not-green-0",
-  "activation": {
-    "type": "sonar",
-    "payload": {
-      "sector": 7
-    }
-  }
-}
-```
-
----
-
-### Drone Action
-```json
-{
-  "direction": "W",
-  "load_system": "drone",
-  "engineer_button_id": "W-green-0",
-  "activation": {
-    "type": "drone",
-    "payload": {
-      "sector": 3
-    }
-  }
-}
-```
-
----
-
-### Silence Action
-```json
-{
-  "direction": "N",
-  "load_system": "silence",
-  "engineer_button_id": "N-green-0",
-  "activation": {
-    "type": "silence",
-    "payload": {
-      "direction": "N",
-      "steps": 2
-    }
-  }
-}
-```
-
----
-
-### Repair Action
-```json
-{
-  "direction": "S",
-  "load_system": "repair",
-  "engineer_button_id": "S-not-green-0",
-  "activation": {
-    "type": "repair",
-    "payload": {
-      "system": "weapon"
-    }
-  }
-}
-```
-
----
-
-### Surface Action
-```json
-{
-  "direction": "SURFACE"
-}
-```
-
----
-
-### Move Only (No System Activation)
 ```json
 {
   "direction": "N",
@@ -171,47 +12,57 @@ All actions follow this core structure:
 }
 ```
 
-## Output Format
+## Rules (follow strictly)
 
+### 1. direction
+- Must be one of the legal move directions listed in `possible_actions` in the game state.
+- Check `own_routes` — never pick a direction that would land on an already-visited cell.
+- Use the Phase 2 consensus direction unless it is illegal, in which case pick the safest legal alternative.
+- If no legal move exists, use `"SURFACE"` (omit the other two fields).
+
+### 2. load_system
+- The system to charge this turn.
+- **Check inbox first**: if the First Mate sent a charge recommendation, use it.
+- Must be one of: `torpedo`, `mine`, `sonar`, `drone`, `silence`, `repair`.
+- Always include this field.
+
+### 3. engineer_button_id
+- **The direction prefix of the button MUST match your chosen `direction`.**
+  - Moving N → button must start with `N-`
+  - Moving S → button must start with `S-`
+  - Moving E → button must start with `E-`
+  - Moving W → button must start with `W-`
+- **Check inbox first**: if the Engineer sent per-direction recommendations, use the one for your chosen direction.
+  - Example inbox message: `"Engineer board recommendations: N→N-not-green-0, S→S-down-green-4, E→E-not-green-1, W→W-not-green-0"`
+  - If moving S, use `S-down-green-4`.
+- If no Engineer recommendation is available, pick the safest uncrossed button for your direction from `engineer_board` (green > yellow > red > radioactive).
+- Always include this field.
+
+## Examples
+
+Moving S, First Mate recommends sonar, Engineer recommends `S-down-green-4` for South:
+```json
+{
+  "direction": "S",
+  "load_system": "sonar",
+  "engineer_button_id": "S-down-green-4"
+}
 ```
-## Action Summary
-- **Type**: [SYSTEM_NAME]
-- **Direction**: [N/S/E/W]
-- **Targets**: [Coordinates if applicable]
 
-## Consensus Alignment
-- **Phase 2 consensus**: [Direction] + [System]
-- **This action implements**: [How this action matches the consensus]
-
-## Final Action (JSON)
-
-\`\`\`json
+Moving N, no inbox messages:
+```json
 {
   "direction": "N",
-  "load_system": "system_name",
-  "engineer_button_id": "N-status-0",
-  "activation": {
-    "type": "system_name",
-    "payload": {...}
-  }
+  "load_system": "torpedo",
+  "engineer_button_id": "N-not-green-0"
 }
-\`\`\`
-
-## Final Validation
-- Direction valid: ✓
-- System available: ✓
-- Coordinates legal: ✓
-- Strategy aligned: ✓
-
-## Rationale
-[2-3 sentences on why this action best serves the team objective given current game state and team strategy]
-
-## Team Communication Notes
-[Any notes for coordinating with first mate, engineer, or radio operator on this turn]
 ```
 
-## Key Principles
-- **Precision**: Every action parameter must be exact and legal
-- **Traceability**: Clear link from consensus decision to final action
-- **Validation**: All constraints checked before finalizing
-- **Clarity**: Rationale explains both tactical and strategic reasoning
+Surfacing (no legal moves):
+```json
+{
+  "direction": "SURFACE"
+}
+```
+
+Return valid JSON only. No other text outside the JSON block.

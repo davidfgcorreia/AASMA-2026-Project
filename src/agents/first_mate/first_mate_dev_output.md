@@ -1,8 +1,9 @@
-The current system gauges are all at 0. Given our position at (2,4) and the need to establish situational awareness before engaging, I propose **Mode 2: Discovery**.
+Current state: All systems are at 0 charge. 
 
-**Reasoning:**
-1. Our belief map is highly dispersed; we lack sufficient information on the enemy's location to commit to an attack.
-2. Mode 2 prioritizes **Sonar** on the first turn to begin narrowing down the enemy's position.
-3. This aligns with our goal of improving localization before committing heavy weapons.
+Strategy: We are at the start of the game with no enemy information. I propose **Mode 2: Discovery** to prioritize locating the enemy before engaging. 
 
-I propose charging **Sonar** for this turn.
+Plan:
+1. Turn 1: Charge **Sonar**.
+2. Turn 2: Charge **Silence**.
+
+This will allow us to gain intelligence while maintaining a defensive escape option. I propose charging **Sonar** for this turn.

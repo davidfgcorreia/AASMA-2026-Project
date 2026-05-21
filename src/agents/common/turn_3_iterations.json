@@ -1,0 +1,405 @@
+{
+  "turn_id": 3,
+  "iterations": [
+    {
+      "iteration": 0,
+      "proposals": {
+        "engineer": {
+          "role": "engineer",
+          "type": "END_TURN",
+          "payload": {},
+          "reasoning": "",
+          "messages": [
+            {
+              "recipient": "captain",
+              "text": "Engineer fallback: W→W-not-green-0",
+              "metadata": {
+                "recommendations": {}
+              }
+            }
+          ]
+        },
+        "first_mate": {
+          "role": "first_mate",
+          "type": "END_TURN",
+          "payload": {},
+          "reasoning": "",
+          "messages": [
+            {
+              "recipient": "captain",
+              "text": "Charge torpedo next.",
+              "metadata": {
+                "recommended_system": "torpedo"
+              }
+            }
+          ]
+        },
+        "radio_operator": {
+          "role": "radio_operator",
+          "type": "END_TURN",
+          "payload": {},
+          "reasoning": "Enemy (0,0) sector 1 conf LOW (194 possible cells, 0 moves heard).",
+          "messages": [
+            {
+              "recipient": "captain",
+              "text": "Enemy ~(0,0) sector 1 [conf LOW 6%]. Last moves: none. Search space: 194 cell(s). Best sensor: drone sector 1.",
+              "metadata": {
+                "most_likely_position": {
+                  "x": 0,
+                  "y": 0
+                },
+                "most_likely_sector": 1,
+                "confidence": 0.059278350515463915,
+                "possible_count": 194,
+                "recommended_sensor": "drone",
+                "best_sector": 1
+              }
+            },
+            {
+              "recipient": "first_mate",
+              "text": "Charge drone (sector 1). Enemy confidence LOW.",
+              "metadata": {
+                "recommended_sensor": "drone",
+                "best_sector": 1
+              }
+            }
+          ]
+        },
+        "captain": {
+          "role": "captain",
+          "type": "MOVE",
+          "payload": {
+            "direction": "E",
+            "charge": "torpedo",
+            "breakdown_choice": {
+              "button_id": "E-not-green-1",
+              "direction": "E",
+              "slot": 1,
+              "slot_index": 1,
+              "circuit_part": "not",
+              "function_type": "green"
+            }
+          },
+          "reasoning": ""
+        }
+      },
+      "inbox": {
+        "engineer": [],
+        "first_mate": [
+          {
+            "sender": "radio_operator",
+            "recipient": "first_mate",
+            "turn_id": 2,
+            "text": "Charge drone (sector 1). Enemy confidence LOW.",
+            "metadata": {
+              "recommended_sensor": "drone",
+              "best_sector": 1
+            }
+          }
+        ],
+        "radio_operator": [],
+        "captain": [
+          {
+            "sender": "engineer",
+            "recipient": "captain",
+            "turn_id": 2,
+            "text": "Engineer fallback: W→W-not-green-0",
+            "metadata": {
+              "recommendations": {}
+            }
+          },
+          {
+            "sender": "first_mate",
+            "recipient": "captain",
+            "turn_id": 2,
+            "text": "Charge torpedo next.",
+            "metadata": {
+              "recommended_system": "torpedo"
+            }
+          },
+          {
+            "sender": "radio_operator",
+            "recipient": "captain",
+            "turn_id": 2,
+            "text": "Enemy ~(0,0) sector 1 [conf LOW 6%]. Last moves: none. Search space: 194 cell(s). Best sensor: drone sector 1.",
+            "metadata": {
+              "most_likely_position": {
+                "x": 0,
+                "y": 0
+              },
+              "most_likely_sector": 1,
+              "confidence": 0.059278350515463915,
+              "possible_count": 194,
+              "recommended_sensor": "drone",
+              "best_sector": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "iteration": 1,
+      "proposals": {
+        "engineer": {
+          "role": "engineer",
+          "type": "END_TURN",
+          "payload": {},
+          "reasoning": "## Direction N\n- Available: N-not-green-0 (green), N-not-red-1 (red), N-not-radioactive-2 (radioactive), N-central-red-3 (red), N-central-yellow-4 (yellow), N-central-red-5 (red)\n- Recommended: N-not-green-0 — Safest priority (green)\n- Warning: None\n\n## Direction S\n- Available: S-not-red-0 (red), S-not-radioactive-1 (radioactive), S-down-yellow-3 (yellow), S-down-red-5 (red)\n- Recommended: S-down-yellow-3 — Safest available (yellow)\n- Warning: None\n\n## Direction E\n- Available: E-not-radioactive-0 (radioactive), E-not-green-1 (green), E-not-radioactive-2 (radioactive), E-down-yellow-3 (yellow), E-central-green-4 (green), E-top-red-5 (red)\n- Recommended: E-not-green-1 — Safest priority (green)\n- Warning: None\n\n## Direction W\n- Available: W-not-green-0 (green), W-not-radioactive-1 (radioactive), W-not-radioactive-2 (radioactive), W-top-red-3 (red), W-top-green-4 (green), W-top-yellow-5 (yellow)\n- Recommended: W-not-green-0 — Safest priority (green)\n- Warning: None\n\n## Repair Assessment\n- Recommended: no\n- Reason: System status is currently stable with no radioactive buttons crossed yet.",
+          "messages": [
+            {
+              "recipient": "captain",
+              "text": "Engineer fallback: W→W-not-green-0",
+              "metadata": {
+                "recommendations": {}
+              }
+            }
+          ]
+        },
+        "first_mate": {
+          "role": "first_mate",
+          "type": "END_TURN",
+          "payload": {},
+          "reasoning": "",
+          "messages": [
+            {
+              "recipient": "captain",
+              "text": "Charge torpedo next.",
+              "metadata": {
+                "recommended_system": "torpedo"
+              }
+            }
+          ]
+        },
+        "radio_operator": {
+          "role": "radio_operator",
+          "type": "END_TURN",
+          "payload": {},
+          "reasoning": "Enemy (0,0) sector 1 conf LOW (194 possible cells, 0 moves heard).",
+          "messages": [
+            {
+              "recipient": "captain",
+              "text": "Enemy ~(0,0) sector 1 [conf LOW 6%]. Last moves: none. Search space: 194 cell(s). Best sensor: drone sector 1.",
+              "metadata": {
+                "most_likely_position": {
+                  "x": 0,
+                  "y": 0
+                },
+                "most_likely_sector": 1,
+                "confidence": 0.059278350515463915,
+                "possible_count": 194,
+                "recommended_sensor": "drone",
+                "best_sector": 1
+              }
+            },
+            {
+              "recipient": "first_mate",
+              "text": "Charge drone (sector 1). Enemy confidence LOW.",
+              "metadata": {
+                "recommended_sensor": "drone",
+                "best_sector": 1
+              }
+            }
+          ]
+        },
+        "captain": {
+          "role": "captain",
+          "type": "MOVE",
+          "payload": {
+            "direction": "E",
+            "charge": "torpedo",
+            "breakdown_choice": {
+              "button_id": "E-not-green-1",
+              "direction": "E",
+              "slot": 1,
+              "slot_index": 1,
+              "circuit_part": "not",
+              "function_type": "green"
+            }
+          },
+          "reasoning": ""
+        }
+      },
+      "inbox": {
+        "engineer": [],
+        "first_mate": [
+          {
+            "sender": "radio_operator",
+            "recipient": "first_mate",
+            "turn_id": 2,
+            "text": "Charge drone (sector 1). Enemy confidence LOW.",
+            "metadata": {
+              "recommended_sensor": "drone",
+              "best_sector": 1
+            }
+          },
+          {
+            "sender": "radio_operator",
+            "recipient": "first_mate",
+            "turn_id": 2,
+            "text": "Charge drone (sector 1). Enemy confidence LOW.",
+            "metadata": {
+              "recommended_sensor": "drone",
+              "best_sector": 1
+            }
+          }
+        ],
+        "radio_operator": [],
+        "captain": [
+          {
+            "sender": "engineer",
+            "recipient": "captain",
+            "turn_id": 2,
+            "text": "Engineer fallback: W→W-not-green-0",
+            "metadata": {
+              "recommendations": {}
+            }
+          },
+          {
+            "sender": "first_mate",
+            "recipient": "captain",
+            "turn_id": 2,
+            "text": "Charge torpedo next.",
+            "metadata": {
+              "recommended_system": "torpedo"
+            }
+          },
+          {
+            "sender": "radio_operator",
+            "recipient": "captain",
+            "turn_id": 2,
+            "text": "Enemy ~(0,0) sector 1 [conf LOW 6%]. Last moves: none. Search space: 194 cell(s). Best sensor: drone sector 1.",
+            "metadata": {
+              "most_likely_position": {
+                "x": 0,
+                "y": 0
+              },
+              "most_likely_sector": 1,
+              "confidence": 0.059278350515463915,
+              "possible_count": 194,
+              "recommended_sensor": "drone",
+              "best_sector": 1
+            }
+          },
+          {
+            "sender": "engineer",
+            "recipient": "captain",
+            "turn_id": 2,
+            "text": "Engineer fallback: W→W-not-green-0",
+            "metadata": {
+              "recommendations": {}
+            }
+          },
+          {
+            "sender": "first_mate",
+            "recipient": "captain",
+            "turn_id": 2,
+            "text": "Charge torpedo next.",
+            "metadata": {
+              "recommended_system": "torpedo"
+            }
+          },
+          {
+            "sender": "radio_operator",
+            "recipient": "captain",
+            "turn_id": 2,
+            "text": "Enemy ~(0,0) sector 1 [conf LOW 6%]. Last moves: none. Search space: 194 cell(s). Best sensor: drone sector 1.",
+            "metadata": {
+              "most_likely_position": {
+                "x": 0,
+                "y": 0
+              },
+              "most_likely_sector": 1,
+              "confidence": 0.059278350515463915,
+              "possible_count": 194,
+              "recommended_sensor": "drone",
+              "best_sector": 1
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "accepted": [
+    {
+      "role": "captain",
+      "type": "MOVE",
+      "payload": {
+        "direction": "E",
+        "charge": "torpedo",
+        "breakdown_choice": {
+          "button_id": "E-not-green-1",
+          "direction": "E",
+          "slot": 1,
+          "slot_index": 1,
+          "circuit_part": "not",
+          "function_type": "green"
+        }
+      },
+      "reasoning": ""
+    }
+  ],
+  "execution": {
+    "turn_id": 2,
+    "accepted_intents": [
+      {
+        "role": "captain",
+        "type": "MOVE",
+        "payload": {
+          "direction": "E",
+          "charge": "torpedo",
+          "breakdown_choice": {
+            "button_id": "E-not-green-1",
+            "direction": "E",
+            "slot": 1,
+            "slot_index": 1,
+            "circuit_part": "not",
+            "function_type": "green"
+          }
+        },
+        "reasoning": "",
+        "turn_id": 2
+      }
+    ],
+    "executed_actions": [
+      {
+        "actor": "BLUE",
+        "type": "MOVE",
+        "payload": {
+          "direction": "E",
+          "charge": "torpedo",
+          "breakdown_choice": {
+            "button_id": "E-not-green-1",
+            "direction": "E",
+            "slot": 1,
+            "slot_index": 1,
+            "circuit_part": "not",
+            "function_type": "green"
+          }
+        }
+      }
+    ],
+    "rejected_intents": [],
+    "events": [
+      {
+        "type": "breakdown",
+        "actor": "BLUE",
+        "direction": "E",
+        "button_id": "E-not-green-1",
+        "circuit_part": "not",
+        "function_type": "green"
+      },
+      {
+        "type": "move",
+        "actor": "BLUE",
+        "direction": "E",
+        "to": [
+          2,
+          3
+        ],
+        "charge": "torpedo"
+      }
+    ],
+    "success": true,
+    "errors": []
+  }
+}

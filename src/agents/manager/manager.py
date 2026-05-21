@@ -254,7 +254,20 @@ class TeamAgentManager:
         return True
 
     def choose_turn_actions(self) -> list[dict[str, Any]]:
-        """Choose the accepted turn actions using a majority rule."""
+        """Choose the accepted turn actions.
+
+        Primary path: if agents have coordinated across iterations and a
+        majority-voted signature exists, only those proposals are accepted.
+
+        Fallback path: when no proposal reaches majority (the common case in
+        single-iteration mode where each role self-votes once), every non-OMIT
+        proposal is accepted — each role is its own authority for its domain.
+
+        In both cases, END_TURN pass-through proposals (submitted by support
+        roles that have no direct game action this turn) are dropped whenever
+        at least one real game action is present, to avoid sending spurious
+        END_TURN calls to the engine.
+        """
         active_count = max(1, len(self._active_roles))
         majority = active_count // 2 + 1
         accepted: list[dict[str, Any]] = []
@@ -265,15 +278,32 @@ class TeamAgentManager:
             for signature, voters in self._turn_action_votes.items()
         }
 
+        majority_winners: list[dict[str, Any]] = []
+        fallback_candidates: list[dict[str, Any]] = []
+
         for role, proposal in self._turn_action_proposals.items():
             if proposal.get("type") == "OMIT":
                 omitted.append({"role": role.value, **proposal})
                 continue
             signature = action_signature(proposal)
             if votes_by_signature.get(signature, 0) >= majority:
-                accepted.append({"role": role.value, **proposal})
+                majority_winners.append({"role": role.value, **proposal})
             else:
-                omitted.append({"role": role.value, **proposal})
+                fallback_candidates.append({"role": role.value, **proposal})
+
+        if majority_winners:
+            # Coordinated consensus reached — use majority winners only
+            omitted.extend(fallback_candidates)
+            accepted = majority_winners
+        else:
+            # No consensus — accept every role's proposal independently
+            accepted = fallback_candidates
+
+        # Drop END_TURN pass-throughs when real game actions are present
+        real_actions = [p for p in accepted if p.get("type") != "END_TURN"]
+        if real_actions:
+            omitted.extend(p for p in accepted if p.get("type") == "END_TURN")
+            accepted = real_actions
 
         self._write_turn_actions_ledger(status="resolved", accepted=accepted, omitted=omitted)
         if self._activation_until_actions_chosen:

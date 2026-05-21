@@ -10,13 +10,17 @@ Review the current game state, your memory, context, and the team strategy, then
 
 ## Input Sources
 - Current game state (position, damage, routes, possible actions)
+- `own_routes` — all cells already visited this game; you CANNOT move to any of these
+- `inbox` — messages from teammates this turn:
+  - **Engineer**: per-direction button recommendations (use for `engineer_button_id`)
+  - **First Mate**: which system to charge next (use for `load_system`)
+  - **Radio Operator**: enemy position estimate and confidence (use for targeting decisions)
 - Your memory of previous moves and enemy behavior
-- Team context and role assignments
-- Play context (rules, map, enemy probabilities)
 - Strategy guide (tactical priorities and constraints)
 
 ## Constraints
-- Only suggest legal moves and actions based on current game state
+- Only suggest directions listed in `possible_actions` (legal moves only)
+- Never choose a direction that leads to a cell already in `own_routes`
 - Movement must be one cardinal direction at a time
 - Cannot activate two systems in a row without movement
 - Must respect the strategy guide priorities
