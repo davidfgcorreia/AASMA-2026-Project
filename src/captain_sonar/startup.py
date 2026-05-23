@@ -9,6 +9,7 @@ import pygame
 from .config import TILE_SIZE, WINDOW_PADDING, PANEL_WIDTH
 from .game_state import SubmarineState
 from .map_loader import MapData
+from agents.manager.startup.start_position import start_position
 
 
 GridPos = Tuple[int, int]
@@ -33,8 +34,8 @@ def choose_start_positions(
     start_mode: str | None,
     surface: pygame.Surface,
     renderer,
-    team_picker: StartPositionPicker | None = None,
     play_types_path: str | None = None,
+    agent_managers: Mapping[str, object] | None = None,
 ) -> dict[str, SubmarineState]:
     default = {
         "BLUE": SubmarineState(x=1, y=1),
@@ -54,19 +55,26 @@ def choose_start_positions(
     for team in ("BLUE", "RED"):
         play_type = team_play_types.get(team, TEAM_HUMAN)
         if play_type == TEAM_AGENT:
-            if team_picker is None:
-                raise ValueError(f"{team} is configured as agent but no team_picker was provided")
+            manager = agent_managers.get(team) if agent_managers is not None else None
+            if manager is None:
+                raise ValueError(f"{team} is configured as agent but no manager was provided")
             attempts = 0
             picked = None
             while attempts < 3:
                 try:
-                    picked = choose_single_team_start_position(map_data, team, confirmed, team_picker)
-                    if picked is None:
-                        raise ValueError(f"team_picker returned no position for agent team {team}")
-                    confirmed[team] = picked
+                    candidate = start_position(map_data)
+                    if candidate is None:
+                        raise ValueError(f"agent manager returned no position for team {team}")
+                    picked = candidate
+
+                    # validate picked coords
+                    _validate_start_position(map_data, (picked[0], picked[1]), team=team)
+                    if any(sub.x == picked[0] and sub.y == picked[1] for sub in confirmed.values()):
+                        raise ValueError(f"{team} start position overlaps an already selected tile: {picked}")
+
+                    confirmed[team] = SubmarineState(x=picked[0], y=picked[1])
                     break
                 except ValueError as e:
-                    # show a brief message on the UI to indicate invalid pick
                     if surface is not None and renderer is not None:
                         _flash_message(surface, renderer, str(e))
                     attempts += 1

@@ -17,7 +17,11 @@ if TYPE_CHECKING:
 
 def read_role_memory(role: AgentRole | str, base_path: str | Path | None = None) -> str:
     """Read a role context, prompt, or memory markdown file if present."""
-    resolved_role = role.value if isinstance(role, AgentRole) else str(role)
+    # Roles are stored in lowercase directories (e.g., 'captain'), prefer role.name.lower().
+    if isinstance(role, AgentRole):
+        resolved_role = role.name.lower()
+    else:
+        resolved_role = str(role).lower()
     root = Path(base_path) if base_path is not None else Path(__file__).resolve().parent.parent
     context_path = root / resolved_role / "context.md"
     if context_path.exists():
@@ -235,6 +239,43 @@ def call_agent_activity(
         timeout_seconds=timeout_seconds if timeout_seconds is not None else 60.0,
     )
 
+def call_agent_activity_with_context(
+    *,
+    model: str,
+    prompt: str,
+    context: str,
+    role: AgentRole | str,
+    api_key: str | None = None,
+    system_instruction: str | None = None,
+    temperature: float | None = None,
+    max_output_tokens: int | None = None,
+    top_p: float | None = None,
+    top_k: int | None = None,
+    safety_settings: list[dict[str, Any]] | None = None,
+    extra_generation_config: dict[str, Any] | None = None,
+    timeout_seconds: float | None = None,
+) -> GeminiResponse:
+    """Call Gemini using a pre-built context string (no context assembly).
+
+    This helper is for callers that already have a complete context string
+    and do not want the function to assemble it from files.
+    """
+    load_env_file()
+    return call_gemini(
+        model=model,
+        api_key=api_key,
+        context=context,
+        prompt=prompt,
+        system_instruction=system_instruction,
+        temperature=temperature,
+        max_output_tokens=max_output_tokens,
+        top_p=top_p,
+        top_k=top_k,
+        safety_settings=safety_settings,
+        extra_generation_config=extra_generation_config,
+        timeout_seconds=timeout_seconds if timeout_seconds is not None else 60.0,
+    )
+
 
 def send_inter_agent_message(
     manager: TeamAgentManager,
@@ -244,7 +285,8 @@ def send_inter_agent_message(
     metadata: dict[str, Any] | None = None,
 ) -> bool:
     """Route a message through the manager with a single helper call."""
-    return manager.send_message(sender, recipient, text, metadata)
+    from agents.manager.pipeline_helpers.manager_api import send_message as manager_send_message
+    return manager_send_message(manager, sender, recipient, text, metadata)
 
 
 def broadcast_team_message(
@@ -254,7 +296,8 @@ def broadcast_team_message(
     metadata: dict[str, Any] | None = None,
 ) -> bool:
     """Broadcast a message to the active team roles."""
-    return manager.broadcast(sender, text, metadata)
+    from agents.manager.pipeline_helpers.manager_api import broadcast as manager_broadcast
+    return manager_broadcast(manager, sender, text, metadata)
 
 
 def build_team_activity_payload(

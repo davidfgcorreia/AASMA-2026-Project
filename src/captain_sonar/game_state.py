@@ -119,6 +119,7 @@ class GameState:
     # === Systems (First Mate) ===
     gauges: Dict[str, Dict[str, int]] = field(default_factory=dict)
     last_action_system: Dict[str, bool] = field(default_factory=dict)
+    last_action_summary: Dict[str, dict[str, Any]] = field(default_factory=dict)
     
     # === Breakdowns (Engineer) ===
     breakdowns: Dict[str, BreakdownState] = field(default_factory=dict)
@@ -452,6 +453,12 @@ class GameState:
             "to": (nx, ny),
             "charge": charge
         })
+        self.last_action_summary[action.actor] = {
+            "type": "move",
+            "direction": direction,
+            "charged_system": charge,
+            "activated_system": None,
+        }
 
     # === SILENCE (Stealth Movement) ===
 
@@ -524,6 +531,12 @@ class GameState:
             "to": (sub.x, sub.y),
             "charge": charge,
         })
+        self.last_action_summary[action.actor] = {
+            "type": "silence",
+            "direction": direction,
+            "charged_system": charge,
+            "activated_system": "silence",
+        }
 
     # === WEAPONS ===
 
@@ -568,6 +581,11 @@ class GameState:
         self._consume_gauge(action.actor, "torpedo")
         self.last_action_system[action.actor] = True
         self._apply_explosion((tx, ty), source="torpedo", owner=action.actor)
+        self.last_action_summary[action.actor] = {
+            "type": "torpedo",
+            "charged_system": None,
+            "activated_system": "torpedo",
+        }
 
     def _resolve_mine(self, action: Action) -> None:
         """
@@ -636,6 +654,11 @@ class GameState:
             "actor": action.actor,
             "target": (tx, ty)
         })
+        self.last_action_summary[action.actor] = {
+            "type": "mine_dropped",
+            "charged_system": None,
+            "activated_system": "mine",
+        }
 
     def _resolve_trigger_mine(self, action: Action) -> None:
         """
@@ -675,6 +698,11 @@ class GameState:
         self.mines.pop(mine_index)
         self.last_action_system[action.actor] = False
         self._apply_explosion((tx, ty), source="mine", owner=action.actor)
+        self.last_action_summary[action.actor] = {
+            "type": "trigger_mine",
+            "charged_system": None,
+            "activated_system": None,
+        }
 
     # === DETECTION ===
 
@@ -714,6 +742,11 @@ class GameState:
             "response": response,
             "enemy_sector": enemy_sector
         })
+        self.last_action_summary[action.actor] = {
+            "type": "drone",
+            "charged_system": None,
+            "activated_system": "drone",
+        }
 
     def _resolve_sonar(self, action: Action) -> None:
         """
@@ -797,6 +830,11 @@ class GameState:
             "true_info": true_piece,
             "false_info": false_piece,
         })
+        self.last_action_summary[action.actor] = {
+            "type": "sonar",
+            "charged_system": None,
+            "activated_system": "sonar",
+        }
 
     # === REPAIR (ENGINEER) ===
 
@@ -820,6 +858,11 @@ class GameState:
             "actor": action.actor,
             "damage": sub.damage
         })
+        self.last_action_summary[action.actor] = {
+            "type": "repair",
+            "charged_system": None,
+            "activated_system": None,
+        }
 
     # === SURFACE ===
 
@@ -853,6 +896,11 @@ class GameState:
             "sector": sector,
             "forced": forced
         })
+        self.last_action_summary[actor] = {
+            "type": "surface",
+            "charged_system": None,
+            "activated_system": None,
+        }
 
     # =========================================================================
     # PRIVATE: BREAKDOWN MANAGEMENT (ENGINEER ROLE - Phase 2)

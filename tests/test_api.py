@@ -117,6 +117,7 @@ def test_team_view_exposes_agent_facing_state_without_enemy_position() -> None:
     assert view["team"] == "BLUE"
     assert view["own_submarine"] == {"x": 1, "y": 1, "damage": 0}
     assert view["radio_operator"] is not None
+    assert view["enemy_last_play"] is None
     assert "enemy_submarine" not in view
 
 
@@ -224,6 +225,12 @@ def test_team_view_advanced_state_for_blue() -> None:
     assert view["own_gauges"]["torpedo"] == 2
     assert view["system_utilization"]["gauges"]["torpedo"] == 2
     assert view["system_utilization"]["utilization"]["torpedo"] == 0.5
+
+    assert view["enemy_last_play"] == {
+        "type": "move",
+        "direction": "W",
+        "charged_system": "sonar",
+    }
 
     eb = view["engineer_board"]
     assert eb is not None

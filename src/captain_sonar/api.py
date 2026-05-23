@@ -301,11 +301,25 @@ def get_team_view(state: GameState, team: str) -> dict[str, Any]:
         "last_action_system": state.last_action_system.get(team, False),
         "skip_turns": state.skip_turns.get(team, 0),
         "radio_operator": get_radio_operator_state(state, team),
+        "enemy_last_play": get_enemy_last_play(state, team),
         "enemy_trajectory_predicted": (
             radio_operator.heard_move_sequence() if radio_operator is not None else []
         ),
         "events": get_events(state),
     }
+
+
+def get_enemy_last_play(state: GameState, team: str) -> dict[str, Any] | None:
+    enemy_team = next((name for name in state.subs if name != team), None)
+    if enemy_team is None:
+        return None
+
+    summary = getattr(state, "last_action_summary", {}).get(enemy_team)
+    if summary is None:
+        return None
+    if summary.get("activated_system") is None:
+        summary.pop("activated_system", None)
+    return dict(summary)
 
 
 def snapshot_game_state(state: GameState, turn_id: int | None = None) -> dict[str, Any]:

@@ -6,7 +6,7 @@ import random
 
 import pygame
 
-from agents.manager.runtime import build_team_agent_manager
+from agents.manager.manager import TeamAgentManager
 
 from .config import (
     MAP_BACKGROUND_PATH,
@@ -70,24 +70,18 @@ def main() -> None:
     renderer = Renderer(surface, map_data, background_path=MAP_BACKGROUND_PATH)
     team_play_types = load_team_play_types(args.play_types)
     agent_managers = {
-        team: build_team_agent_manager(team)
+        team: TeamAgentManager(team)
         for team, play_type in team_play_types.items()
         if play_type == "agent"
     }
-
-    def agent_team_picker(team: str, map_data, confirmed):
-        manager = agent_managers.get(team)
-        if manager is None:
-            return None
-        return manager.choose_start_position(map_data, confirmed)
 
     subs = choose_start_positions(
         map_data,
         args.start,
         surface,
         renderer,
-        team_picker=agent_team_picker,
         play_types_path=args.play_types,
+        agent_managers=agent_managers,
     )
     state = GameState(map_data=map_data, subs=subs)
     log_dir = os.path.dirname(args.log)

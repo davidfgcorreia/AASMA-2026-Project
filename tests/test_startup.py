@@ -8,18 +8,25 @@ from captain_sonar.startup import (
     choose_start_positions,
     load_team_play_types,
 )
-import captain_sonar.main as main_module
 
 import json
+import importlib
+from pathlib import Path
+from typing import Any, cast
+import sys
+import types
 import pygame
 import pytest
 
 
 def test_choose_start_positions_default_and_swap():
     map_data = MapData(width=6, height=5, tiles=[["."] * 6 for _ in range(5)])
+    pygame.init()
+    surface = pygame.Surface((1, 1))
+    renderer = Renderer(surface, map_data, background_path=None)
 
-    default_positions = choose_start_positions(map_data, "default", None, None)
-    swapped_positions = choose_start_positions(map_data, "swap", None, None)
+    default_positions = choose_start_positions(map_data, "default", surface, renderer)
+    swapped_positions = choose_start_positions(map_data, "swap", surface, renderer)
 
     assert default_positions["BLUE"].x == 1
     assert default_positions["BLUE"].y == 1
@@ -65,12 +72,12 @@ def test_renderer_only_shows_active_team_mine_count_in_panel():
             rendered_texts.append(text)
             return pygame.Surface((1, 1))
 
-    renderer.font = DummyFont()
+    cast(Any, renderer).font = DummyFont()
     state = GameState(
         map_data=map_data,
         subs={"BLUE": SubmarineState(x=1, y=1), "RED": SubmarineState(x=4, y=3)},
     )
-    state.mines = [
+    cast(Any, state).mines = [
         type("Mine", (), {"x": 1, "y": 1, "owner": "BLUE"})(),
         type("Mine", (), {"x": 4, "y": 3, "owner": "RED"})(),
     ]
@@ -84,15 +91,12 @@ def test_renderer_only_shows_active_team_mine_count_in_panel():
 
 def test_choose_start_positions_mixed_agent_and_human(monkeypatch, tmp_path):
     map_data = MapData(width=6, height=5, tiles=[["."] * 6 for _ in range(5)])
-    surface = None
-    renderer = None
+    surface = pygame.Surface((1, 1))
+    renderer = Renderer(surface, map_data, background_path=None)
     config_path = tmp_path / "play_types.json"
     config_path.write_text(json.dumps({"BLUE": "agent", "RED": "human"}), encoding="utf-8")
 
-    def picker(team, _map_data, _confirmed):
-        if team == "BLUE":
-            return (1, 1)
-        return None
+    monkeypatch.setattr(startup_module, "start_position", lambda _map_data: (1, 1))
 
     def human_picker(_map_data, team, _surface, _renderer):
         assert team == "RED"
@@ -105,8 +109,8 @@ def test_choose_start_positions_mixed_agent_and_human(monkeypatch, tmp_path):
         start_mode=None,
         surface=surface,
         renderer=renderer,
-        team_picker=picker,
         play_types_path=str(config_path),
+        agent_managers={"BLUE": object()},
     )
 
     assert picked["BLUE"].x == 1
@@ -149,24 +153,17 @@ def test_choose_start_positions_uses_play_types_json(monkeypatch, tmp_path):
 
     monkeypatch.setattr(pygame.event, "get", fake_event_get)
 
-    calls = []
-
-    def picker(team, _map_data, _confirmed):
-        calls.append(team)
-        if team == "BLUE":
-            return (1, 1)
-        return None
+    monkeypatch.setattr(startup_module, "start_position", lambda _map_data: (1, 1))
 
     picked = choose_start_positions(
         map_data,
         start_mode=None,
         surface=surface,
         renderer=renderer,
-        team_picker=picker,
         play_types_path=str(config_path),
+        agent_managers={"BLUE": object()},
     )
 
-    assert calls == ["BLUE"]
     assert picked["BLUE"].x == 1
     assert picked["BLUE"].y == 1
     assert picked["RED"].x == 4
@@ -192,6 +189,11 @@ def test_choose_single_team_start_position_rejects_overlap():
 def test_main_forwards_play_types_path(monkeypatch, tmp_path):
     play_types_path = tmp_path / "play_types.json"
     play_types_path.write_text(json.dumps({"BLUE": "human", "RED": "agent"}), encoding="utf-8")
+
+    fake_runtime = types.ModuleType("agents.manager.runtime")
+    cast(Any, fake_runtime).build_team_agent_manager = lambda _team: object()
+    monkeypatch.setitem(sys.modules, "agents.manager.runtime", fake_runtime)
+    main_module = importlib.import_module("captain_sonar.main")
 
     captured = {}
 
@@ -242,7 +244,7 @@ def test_main_forwards_play_types_path(monkeypatch, tmp_path):
         def run(self):
             return None
 
-    def fake_choose_start_positions(map_data, start_mode, surface, renderer, team_picker=None, play_types_path=None):
+    def fake_choose_start_positions(map_data, start_mode, surface, renderer, play_types_path=None, agent_managers=None):
         captured["play_types_path"] = play_types_path
         return {"BLUE": SubmarineState(x=1, y=1), "RED": SubmarineState(x=4, y=3)}
 

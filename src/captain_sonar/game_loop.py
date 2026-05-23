@@ -16,6 +16,8 @@ from .sonar_response_modal import SonarResponseModal
 from .renderer import Renderer
 from .belief_tracker import BeliefTracker
 
+from agents.manager.pipeline_helpers.manager_api import collect_actions as manager_collect_actions
+
 
 TEAM_HUMAN = "human"
 TEAM_AGENT = "agent"
@@ -266,53 +268,10 @@ class GameLoop:
         manager = self.agent_managers.get(team)
         if manager is None:
             return []
-
-        manager.observe(self.state)
         try:
-            raw_actions = manager.collect_actions(deadline_ms=0)
+            return manager_collect_actions(manager, self.state, phase, deadline_ms=0)
         except NotImplementedError:
             return []
-
-        allowed = (
-            {ActionType.MOVE, ActionType.SURFACE}
-            if phase == "move"
-            else {
-                ActionType.SILENCE,
-                ActionType.TORPEDO,
-                ActionType.SONAR,
-                ActionType.DRONE,
-                ActionType.MINE,
-                ActionType.TRIGGER_MINE,
-            }
-        )
-
-        for proposal in raw_actions.values():
-            candidate = proposal
-            if isinstance(proposal, dict):
-                full_action = proposal.get("full_action")
-                if isinstance(full_action, dict):
-                    candidate = full_action
-            action = self._to_action(team, candidate)
-            if action is not None and action.type in allowed:
-                return [action]
-        return []
-
-    def _to_action(self, default_team: str, payload: object) -> Action | None:
-        if not isinstance(payload, dict):
-            return None
-        raw_type = payload.get("type")
-        if not isinstance(raw_type, str):
-            return None
-        try:
-            action_type = ActionType[raw_type.strip().upper()]
-        except KeyError:
-            return None
-        raw_payload = payload.get("payload")
-        normalized_payload = raw_payload if isinstance(raw_payload, dict) else {}
-        actor = payload.get("actor", default_team)
-        if not isinstance(actor, str):
-            actor = default_team
-        return Action(actor=actor, type=action_type, payload=normalized_payload)
 
     def _team_just_surfaced(self, team: str) -> bool:
         return any(e.get("type") == "surface" and e.get("actor") == team for e in self.state.events)

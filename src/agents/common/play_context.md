@@ -39,33 +39,58 @@ map: 15x15
 0.01 0.01 0.01 0.00 0.01 0.01 0.01 0.01 0.01 0.01 0.01 0.01 0.01 0.01 0.01
 ```
 
-## System Gauges
-```json
-{
-  "torpedo": 0,
-  "mine": 0,
-  "drone": 0,
-  "sonar": 0,
-  "silence": 0,
-  "scenario": 0
-}
-```
-
 ## Engineer Board (Crossed)
 - W: (none)
 - N: (none)
 - S: (none)
 - E: (none)
 
-## Possible Directions
-- N
-- S
-- E
-- W
+- team: BLUE
+- turn: 12
+- round_type: normal
+- source: api
+- enemy_last_play: {"type": "move", "direction": "W", "charged_system": "sonar"}
 
-## My Localization
-- current_position: x=2 y=4 damage=0
-- trajectory: (2,4)
-- routes:
-  - {"x": 2, "y": 4}
-- own_mines: (none)
+```json
+{
+  "source": "api",
+  "round_type": "normal",
+  "team": "BLUE",
+  "turn": 12,
+  "own_submarine": {
+    "x": 2,
+    "y": 4,
+    "damage": 0
+  },
+  "own_gauges": {
+    "torpedo": 0,
+    "mine": 0,
+    "drone": 0,
+    "sonar": 0,
+    "silence": 0,
+    "scenario": 0
+  },
+  "engineer_board": {
+    "team": "BLUE",
+    "circuits_status": {},
+    "crossed_by_direction": {
+      "W": [],
+      "N": [],
+      "S": [],
+      "E": []
+    },
+    "buttons_by_direction": {}
+  },
+  "radio_operator": {
+    "heard_moves": [
+      "W"
+    ],
+    "most_likely_sector": null
+  },
+  "enemy_last_play": {
+    "type": "move",
+    "direction": "W",
+    "charged_system": "sonar"
+  }
+}
+```
