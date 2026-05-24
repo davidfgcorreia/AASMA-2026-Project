@@ -1,7 +1,6 @@
 # Turn Context for CAPTAIN (team: BLUE)
 
-## Context
-```
+# Context
 # Captain Role Context
 
 ## Objective
@@ -9,10 +8,8 @@
 The Captain controls movement, tactical aggression, and the overall turn plan. On the game Capitan Sonar, the Captain is responsible for choosing the team's movement direction and which systems to activate each turn. The Captain must balance safety, tactical flexibility, information gathering, and coordinated team execution to lead the team to victory.
 
 
-```
 
-## Strategy
-```
+# Strategy
 # Captain Strategic Guide
 
 This document outlines the Captain's strategic priorities and decision-making framework for each turn.
@@ -112,19 +109,15 @@ Before finalizing the action:
 - [ ] Action reasoning is clear and defensible
 - [ ] Rationale includes both tactical and strategic elements
 
-```
 
-## Memory
-```
+# Memory
 # Captain Agent Memory
 
 - Primary responsibility: choose movement and turn-level tactical actions.
 - Consumes the captain role view from the manager, not the full board renderer.
 - Uses the shared Gemini helper for planning and the manager inbox for team messages.
-```
 
-## Master Memory
-```
+# Master Memory
 # Master Team Memory
 
 This file stores the agreed team strategy, gameplay hypotheses, and next moves.
@@ -155,10 +148,8 @@ This file stores the agreed team strategy, gameplay hypotheses, and next moves.
 ## Decision Log
 
 - Initial shared team memory created.
-```
 
-## Play Context
-```
+# Play Context
 # Play Context
 
 ## Trajectory Map
@@ -256,4 +247,3 @@ map: 15x15
 }
 ```
 
-```

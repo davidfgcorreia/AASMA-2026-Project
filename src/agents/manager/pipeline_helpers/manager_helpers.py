@@ -2,12 +2,21 @@ from __future__ import annotations
 
 import json
 import time
+import os
+import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
 from captain_sonar.game_state import GameState
 from agents.base import AgentRole
-from agents.common.functions import read_common_context, read_master_memory, read_role_memory
+from agents.common.functions import (
+    call_agent_activity_with_context,
+    read_common_context,
+    read_master_memory,
+    read_role_memory,
+    update_master_memory,
+)
 
 
 def _render_trajectory_map(team_view: dict[str, Any]) -> str:
@@ -152,10 +161,7 @@ def build_turn_start_context_bundle(manager, context_report: dict[str, Any]) -> 
     source = str(context_report.get("source", "api"))
     # Prefer reading an existing play_context file (single shared source).
     play_context_path = Path(__file__).resolve().parents[2] / "common" / "play_context.md"
-    if play_context_path.exists():
-        play_context = play_context_path.read_text(encoding="utf-8")
-    else:
-        play_context = render_play_context(team_view, round_type=round_type, source=source)
+    play_context = play_context_path.read_text(encoding="utf-8")
     common_context = read_common_context()
     master_memory = read_master_memory()
 
@@ -208,7 +214,8 @@ def build_turn_start_context_bundle(manager, context_report: dict[str, Any]) -> 
         team = "team"
     if not isinstance(turn, int):
         try:
-            turn = int(turn)
+            turn_value = 0 if turn is None else turn
+            turn = int(turn_value)
         except Exception:
             turn = 0
 
@@ -223,77 +230,32 @@ def build_turn_start_context_bundle(manager, context_report: dict[str, Any]) -> 
         "roles": role_files,
     }
 
-    bundle_path = Path(__file__).resolve().parents[2] / "common" / "turn_start_context.md"
-    bundle_path.parent.mkdir(parents=True, exist_ok=True)
-    bundle_path.write_text(
-        "\n".join([
-            "# Turn Start Context",
-            "",
-            f"- team: {bundle['team']}",
-            f"- turn: {bundle['turn']}",
-            f"- round_type: {bundle['round_type']}",
-            f"- source: {bundle['source']}",
-            "",
-            "## Shared Context",
-            "```",
-            common_context,
-            "```",
-            "",
-            "## Master Memory",
-            "```",
-            master_memory,
-            "```",
-            "",
-            "## Play Context",
-            "```",
-            play_context,
-            "```",
-            "",
-            "## Role Files",
-            *[
-                f"### {role_name}\n```\ncontext.md:\n{files['context']}\n\nmemory.md:\n{files['memory']}\n\nprompt.md:\n{files['prompt']}\n```"
-                for role_name, files in role_files.items()
-            ],
-            "",
-        ]),
-        encoding="utf-8",
-    )
-    bundle["bundle_path"] = str(bundle_path)
-    # Also write per-role context files into the manager `contexts` folder.
     contexts_dir = Path(__file__).resolve().parents[1] / "contexts"
     contexts_dir.mkdir(parents=True, exist_ok=True)
     team_name = str(bundle.get("team") or "team").replace(" ", "_").lower()
     for role_name, files in role_files.items():
+        if role_name == AgentRole.RADIO_OPERATOR.value:
+            continue
         safe_role = str(role_name).replace(" ", "_").lower()
         file_name = f"{safe_role}_{team_name}.md"
         file_path = contexts_dir / file_name
         parts = [
             f"# Turn Context for {role_name} (team: {bundle.get('team')})",
             "",
-            "## Context",
-            "```",
+            "# Context",
             files.get("context", ""),
-            "```",
             "",
-            "## Strategy",
-            "```",
+            "# Strategy",
             files.get("strategy", ""),
-            "```",
             "",
-            "## Memory",
-            "```",
+            "# Memory",
             files.get("memory", ""),
-            "```",
             "",
-            "## Master Memory",
-            "```",
+            "# Master Memory",
             master_memory,
-            "```",
             "",
-            "## Play Context",
-            "```",
+            "# Play Context",
             play_context,
-            "```",
             "",
         ]
         file_path.write_text("\n".join(parts), encoding="utf-8")
@@ -306,6 +268,64 @@ def write_play_context_for_manager(manager, team_view: dict[str, Any], *, round_
     play_context_path.parent.mkdir(parents=True, exist_ok=True)
     play_context_path.write_text(render_play_context(team_view, round_type=round_type, source=source), encoding="utf-8")
     return str(play_context_path)
+
+def _run_turn_start_role(role_name: str, prompt_path: Path, team: str, turn: int, outputs_dir: Path) -> dict[str, Any]:
+    prompt = prompt_path.read_text(encoding="utf-8").strip()
+    team_name = str(team or "team").replace(" ", "_").lower()
+    role_slug = str(role_name).replace(" ", "_").lower()
+    context_path = Path(__file__).resolve().parents[1] / "contexts" / f"{role_slug}_{team_name}.md"
+    context_text = context_path.read_text(encoding="utf-8")
+
+    model_name = os.getenv("GEMINI_MODEL") or "gemini-3.1-flash-lite"
+    result = call_agent_activity_with_context(
+        model=model_name,
+        prompt=prompt,
+        context=context_text,
+        role=role_name,
+        temperature=0.7,
+        max_output_tokens=512,
+        timeout_seconds=45.0,
+    )
+    output_text = getattr(result, "text", "") or ""
+    output_path = outputs_dir / f"{role_slug}_{team_name}_turn_{turn}.md"
+    output_path.write_text(output_text, encoding="utf-8")
+
+    return {
+        "output_path": str(output_path),
+        "output": output_text,
+    }
+
+
+def run_turn_start_call(bundle: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    base_path = Path(__file__).resolve().parents[2]
+    role_specs: list[tuple[str, Path]] = [
+        ("CAPTAIN", base_path / "captain" / "prompts" / "1_analysis.md"),
+        ("FIRST_MATE", base_path / "first_mate" / "prompts" / "1_strategy_lock.md"),
+        ("ENGINEER", base_path / "engineer" / "prompts" / "1_board_analysis.md"),
+    ]
+    roles_to_run = [
+        (role_name, prompt_path)
+        for role_name, prompt_path in role_specs
+        if role_name in bundle.get("roles", {})
+    ]
+    if not roles_to_run:
+        return {}
+
+    outputs_dir = Path(__file__).resolve().parents[1] / "outputs"
+    outputs_dir.mkdir(parents=True, exist_ok=True)
+    team = str(bundle.get("team") or "team")
+    turn = int(bundle.get("turn") or 0)
+
+    results: dict[str, dict[str, Any]] = {}
+    with ThreadPoolExecutor(max_workers=len(roles_to_run)) as executor:
+        futures = {
+            executor.submit(_run_turn_start_role, role_name, prompt_path, team, turn, outputs_dir): role_name
+            for role_name, prompt_path in roles_to_run
+        }
+        for future in as_completed(futures):
+            role_name = futures[future]
+            results[role_name] = future.result()
+    return results
 
 
 def now_ms() -> int:

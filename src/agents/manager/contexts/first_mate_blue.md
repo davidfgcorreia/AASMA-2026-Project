@@ -1,7 +1,6 @@
 # Turn Context for FIRST_MATE (team: BLUE)
 
-## Context
-```
+# Context
 # First Mate Role Context
 
 ## Objective
@@ -30,10 +29,8 @@ The First Mate manages gauges and system readiness for the team.
 - Maintain readiness on the most likely next system.
 - Report blockers immediately.
 - Coordinate charge choices with the Captain.
-```
 
-## Strategy
-```
+# Strategy
 # First Mate Strategy
 
 The first mate is the system-readiness specialist for the team.
@@ -75,19 +72,15 @@ Load plan:
 - Never waste a load on a system that is already full if another required system is not full.
 - If the current mode sequence is blocked by full gauges, advance to the next step in that mode.
 - If all mode-priority systems are full, default to torpedo.
-```
 
-## Memory
-```
+# Memory
 # First Mate Agent Memory
 
 - Primary responsibility: system charge, readiness, and weapon/sensor planning.
 - Reads system utilization and turn state from the manager role view.
 - Shares short planning messages with the captain and engineer through the manager.
-```
 
-## Master Memory
-```
+# Master Memory
 # Master Team Memory
 
 This file stores the agreed team strategy, gameplay hypotheses, and next moves.
@@ -118,10 +111,8 @@ This file stores the agreed team strategy, gameplay hypotheses, and next moves.
 ## Decision Log
 
 - Initial shared team memory created.
-```
 
-## Play Context
-```
+# Play Context
 # Play Context
 
 ## Trajectory Map
@@ -219,4 +210,3 @@ map: 15x15
 }
 ```
 
-```

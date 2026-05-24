@@ -20,6 +20,7 @@ from captain_sonar.actions import Action, ActionType
 from captain_sonar.game_state import GameState
 from .manager_helpers import build_turn_start_context_bundle
 from .manager_helpers import write_play_context_for_manager
+from .manager_helpers import run_turn_start_call
 # manager_api imports are performed lazily inside functions to avoid
 # circular import problems between this module and `manager_api`.
 
@@ -35,7 +36,7 @@ def run_turn_start_phase(manager, state: GameState) -> dict[str, Any]:
         source=context_report["source"],
     )
     bundle = build_turn_start_context_bundle(manager, context_report)
-    manager._turn_start_bundle = bundle
+    bundle["turn_start_results"] = run_turn_start_call(bundle)
     return context_report
 
 

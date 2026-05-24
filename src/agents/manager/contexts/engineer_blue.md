@@ -1,7 +1,6 @@
 # Turn Context for ENGINEER (team: BLUE)
 
-## Context
-```
+# Context
 # Engineer Role Context
 
 ## Objective
@@ -28,10 +27,8 @@ The Engineer tracks breakdowns caused by movement and protects the submarine fro
 - Protect weapon and sensor availability.
 - Warn the Captain about risky directions.
 - Use repairs to remove harmful breakdown patterns.
-```
 
-## Strategy
-```
+# Strategy
 # Engineer Strategy Guide
 
 ## Button Safety Priority (safest to most dangerous)
@@ -68,19 +65,15 @@ The Engineer tracks breakdowns caused by movement and protects the submarine fro
   the cost of skipping movement.
 - All buttons in a high-priority circuit (red) are nearly exhausted.
 
-```
 
-## Memory
-```
+# Memory
 # Engineer Agent Memory
 
 - Primary responsibility: engineer board selection and breakdown handling.
 - Reads the engineer board snapshot and crossed button state from the manager.
 - Communicates selection intent and repair status through bounded manager messages.
-```
 
-## Master Memory
-```
+# Master Memory
 # Master Team Memory
 
 This file stores the agreed team strategy, gameplay hypotheses, and next moves.
@@ -111,10 +104,8 @@ This file stores the agreed team strategy, gameplay hypotheses, and next moves.
 ## Decision Log
 
 - Initial shared team memory created.
-```
 
-## Play Context
-```
+# Play Context
 # Play Context
 
 ## Trajectory Map
@@ -212,4 +203,3 @@ map: 15x15
 }
 ```
 
-```
