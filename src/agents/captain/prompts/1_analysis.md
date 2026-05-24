@@ -27,27 +27,18 @@ Review the current game state, your memory, context, and the team strategy, then
 - Account for system cooldowns and current damage state
 
 ## Output Format
-Provide your analysis as a structured response with these sections:
+Return your response in this exact order and do not add any extra text:
 
 ```
-## Direction Analysis
-- **Proposed direction**: [N/S/E/W]
-- **Why this direction**: [2-3 sentences on tactical value]
-- **Safety check**: [Confirm no islands, own route crossing, or mines in this path]
+## Memory Update
+[Write the text that should be appended to the Captain memory file for this turn.]
 
-## System Selection
-- **Proposed system**: [MOVE, SILENCE, TORPEDO, MINE, SONAR, DRONE, REPAIR, SURFACE, or TRIGGER_MINE]
-- **Why this system**: [Justification based on game state and strategy]
-- **Readiness check**: [Confirm system is available and not on cooldown]
-
-## Strategy Alignment
-- **Strategic context**: [Which priority from the strategy guide applies here]
-- **Risk assessment**: [Potential enemy responses or consequences]
-- **Alternative considered**: [Brief mention of what you rejected and why]
+## Master Memory Update
+[Write the text that should be appended to the shared master memory for this turn.]
 ```
 
-## Key Principles
-- Prioritize safe movement that keeps future options open
-- Coordinate system use with current intel and team capabilities
-- Balance aggression with defensive positioning
-- Follow the strategy guide strictly
+## Content Rules
+- Put the Captain-specific memory update first.
+- Put the shared master memory update second.
+- Keep both sections concise and directly usable.
+- Do not include direction analysis, system selection, or any other sections.

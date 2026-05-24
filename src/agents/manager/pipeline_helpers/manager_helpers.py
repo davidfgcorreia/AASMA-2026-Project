@@ -4,6 +4,7 @@ import json
 import time
 import os
 import re
+import shutil
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
@@ -296,6 +297,37 @@ def _run_turn_start_role(role_name: str, prompt_path: Path, team: str, turn: int
     }
 
 
+def _extract_section(text: str, header: str) -> str:
+    pattern = rf"^## {re.escape(header)}\s*$([\s\S]*?)(?=^##\s+|\Z)"
+    match = re.search(pattern, text, flags=re.MULTILINE)
+    if not match:
+        return ""
+    return match.group(1).strip()
+
+
+def _role_from_output_filename(file_name: str) -> AgentRole | None:
+    role_slugs = {
+        role.name.lower(): role
+        for role in AgentRole
+        if role != AgentRole.RADIO_OPERATOR
+    }
+    for slug, role in sorted(role_slugs.items(), key=lambda item: len(item[0]), reverse=True):
+        if file_name.startswith(f"{slug}_"):
+            return role
+    return None
+
+
+def _turn_from_output_filename(file_name: str) -> str:
+    match = re.search(r"_turn_(\d+)\.md$", file_name)
+    return match.group(1) if match else "unknown"
+
+
+def _build_reasoning_append(role: AgentRole | None, turn_label: str, content: str) -> str:
+    role_label = role.name.title().replace("_", " ") if role else "Turn"
+    cleaned_content = content.strip()
+    return f"## {role_label} Turn {turn_label} Reasoning\n\n{cleaned_content}" if cleaned_content else ""
+
+
 def run_turn_start_call(bundle: dict[str, Any]) -> dict[str, dict[str, Any]]:
     base_path = Path(__file__).resolve().parents[2]
     role_specs: list[tuple[str, Path]] = [
@@ -326,6 +358,54 @@ def run_turn_start_call(bundle: dict[str, Any]) -> dict[str, dict[str, Any]]:
             role_name = futures[future]
             results[role_name] = future.result()
     return results
+
+
+
+def update_memory(manager, context_report: dict[str, Any]) -> None:
+    outputs_dir = Path(__file__).resolve().parents[1] / "outputs"
+    if not outputs_dir.exists():
+        return
+
+    output_files = sorted(
+        path for path in outputs_dir.iterdir() if path.is_file() and path.suffix.lower() == ".md"
+    )
+    if not output_files:
+        return
+
+    for output_file in output_files:
+        output_text = output_file.read_text(encoding="utf-8")
+        master_update = _extract_section(output_text, "Master Memory Update")
+        if master_update:
+            role = _role_from_output_filename(output_file.name)
+            role_label = role.name.title().replace("_", " ") if role else "Turn"
+            turn_label = _turn_from_output_filename(output_file.name)
+            update_master_memory(f"{role_label} Turn {turn_label}", master_update)
+
+        role_update = _extract_section(output_text, "Memory Update")
+        role = _role_from_output_filename(output_file.name)
+        if role and role_update:
+            current_memory = read_role_memory(role)
+            turn_label = _turn_from_output_filename(output_file.name)
+            reasoning_append = _build_reasoning_append(role, turn_label, role_update)
+            new_memory = (
+                (current_memory + "\n\n" + reasoning_append).strip()
+                if current_memory
+                else reasoning_append
+            )
+            (Path(__file__).resolve().parents[2] / role.name.lower() / "memory.md").write_text(
+                new_memory,
+                encoding="utf-8",
+            )
+
+    for output_file in output_files:
+        try:
+            output_file.unlink()
+        except FileNotFoundError:
+            continue
+
+    for child in sorted(outputs_dir.iterdir(), key=lambda path: len(path.parts), reverse=True):
+        if child.is_dir():
+            shutil.rmtree(child, ignore_errors=True)
 
 
 def now_ms() -> int:

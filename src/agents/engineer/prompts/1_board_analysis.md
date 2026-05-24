@@ -14,25 +14,18 @@ For each direction (N, S, E, W):
 Then decide whether REPAIR is more urgent than further movement.
 
 ## Output Format
+Return your response in this exact order and do not add any extra text:
 
 ```
-## Direction N
-- Available: [button_id (type), ...]
-- Recommended: [button_id] — reason
-- Warning: [any danger note, or "none"]
+## Memory Update
+[Write the text that should be appended to the Engineer memory file for this turn.]
 
-## Direction S
-...
-
-## Direction E
-...
-
-## Direction W
-...
-
-## Repair Assessment
-- Recommended: yes / no
-- Reason: [brief]
+## Master Memory Update
+[Write the text that should be appended to the shared master memory for this turn.]
 ```
 
-Keep it short. One line per point.
+## Content Rules
+- Put the Engineer-specific memory update first.
+- Put the shared master memory update second.
+- Keep both sections short and directly actionable.
+- Do not include board analysis, repair assessment, or any other sections.

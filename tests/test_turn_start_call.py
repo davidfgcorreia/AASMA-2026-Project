@@ -36,6 +36,11 @@ def test_run_turn_start_call_writes_role_outputs(tmp_path, monkeypatch) -> None:
     (src_root / "engineer" / "memory.md").write_text("engineer memory", encoding="utf-8")
     (src_root / "common" / "master_memory.md").write_text("master memory", encoding="utf-8")
 
+    original_captain_memory = (src_root / "captain" / "memory.md").read_text(encoding="utf-8")
+    original_first_mate_memory = (src_root / "first_mate" / "memory.md").read_text(encoding="utf-8")
+    original_engineer_memory = (src_root / "engineer" / "memory.md").read_text(encoding="utf-8")
+    original_master_memory = (src_root / "common" / "master_memory.md").read_text(encoding="utf-8")
+
     fake_file = src_root / "manager" / "pipeline_helpers" / "manager_helpers.py"
     fake_file.parent.mkdir(parents=True, exist_ok=True)
     fake_file.write_text("", encoding="utf-8")
@@ -49,13 +54,27 @@ def test_run_turn_start_call_writes_role_outputs(tmp_path, monkeypatch) -> None:
             "prompt": str(kwargs["prompt"]),
             "context": str(kwargs["context"]),
         })
-        payload = {
-            "memory_update": f"{kwargs['role']} memory update",
-            "master_memory_update": f"{kwargs['role']} master update",
-        }
-        return type("Response", (), {"text": json.dumps(payload)})()
+        output_text = (
+            "## Memory Update\n"
+            f"{kwargs['role']} memory update\n\n"
+            "## Master Memory Update\n"
+            f"{kwargs['role']} master update\n"
+        )
+        return type("Response", (), {"text": output_text})()
+
+    def fake_read_role_memory(role) -> str:
+        return (src_root / role.name.lower() / "memory.md").read_text(encoding="utf-8")
+
+    def fake_update_master_memory(section: str, content: str) -> str:
+        master_path = src_root / "common" / "master_memory.md"
+        current = master_path.read_text(encoding="utf-8")
+        new_text = f"{current}\n## {section}\n\n{content}".strip()
+        master_path.write_text(new_text, encoding="utf-8")
+        return new_text
 
     monkeypatch.setattr(manager_helpers, "call_agent_activity_with_context", fake_call_agent_activity_with_context)
+    monkeypatch.setattr(manager_helpers, "read_role_memory", fake_read_role_memory)
+    monkeypatch.setattr(manager_helpers, "update_master_memory", fake_update_master_memory)
 
     bundle = {
         "team": "BLUE",
@@ -68,23 +87,18 @@ def test_run_turn_start_call_writes_role_outputs(tmp_path, monkeypatch) -> None:
     }
 
     results = manager_helpers.run_turn_start_call(bundle)
+    manager_helpers.update_memory(manager=None, context_report={})
 
     assert set(results) == {"CAPTAIN", "FIRST_MATE", "ENGINEER"}
     assert len(calls) == 3
 
     outputs_dir = src_root / "manager" / "outputs"
-    expected_files = {
-        "captain_blue_turn_12.md": "captain prompt",
-        "first_mate_blue_turn_12.md": "first mate prompt",
-        "engineer_blue_turn_12.md": "engineer prompt",
-    }
+    assert list(outputs_dir.iterdir()) == []
 
-    for file_name, prompt_text in expected_files.items():
-        output_path = outputs_dir / file_name
-        assert output_path.exists()
-        saved_output = output_path.read_text(encoding="utf-8")
-        assert saved_output.startswith('{"memory_update":')
-        assert prompt_text in {entry["prompt"] for entry in calls}
+    assert (src_root / "captain" / "memory.md").read_text(encoding="utf-8") != original_captain_memory
+    assert (src_root / "first_mate" / "memory.md").read_text(encoding="utf-8") != original_first_mate_memory
+    assert (src_root / "engineer" / "memory.md").read_text(encoding="utf-8") != original_engineer_memory
+    assert (src_root / "common" / "master_memory.md").read_text(encoding="utf-8") != original_master_memory
 
     assert {entry["role"] for entry in calls} == {"CAPTAIN", "FIRST_MATE", "ENGINEER"}
     assert any("captain context" in entry["context"] for entry in calls)

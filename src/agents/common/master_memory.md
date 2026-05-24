@@ -28,3 +28,15 @@ This file stores the agreed team strategy, gameplay hypotheses, and next moves.
 ## Decision Log
 
 - Initial shared team memory created.
+
+## Captain Turn 2
+
+The enemy is actively using SONAR to locate us. We need to prioritize SILENCE or DRONE to regain the initiative. Move E to shift position and allow the Engineer to charge critical systems.
+
+## Engineer Turn 2
+
+Turn 12: Submarine is at (2, 4) with zero damage. Engineer board is clean. Maintain focus on charging critical systems (Torpedo/Mine) while avoiding red and radioactive circuits during movement. Next move: Proceed with Captain's heading, prioritizing green/yellow buttons.
+
+## First Mate Turn 2
+
+Turn 12: Enemy moving West and using Sonar. Blue team adopting Discovery mode; prioritizing Sonar readiness to counter enemy tracking.
