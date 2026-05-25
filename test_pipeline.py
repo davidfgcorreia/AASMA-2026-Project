@@ -1,42 +1,27 @@
-"""End-to-end pipeline test through the new manager_api.collect_actions path.
+"""Full pipeline test: run 5 consecutive turn cycles with all model agents.
 
-Builds a TeamAgentManager with all four model agents, runs N turns, applies
-each turn's actions to the GameState, and prints a summary per turn.
+Verifies:
+  - No revisited cells (path blindness fixed)
+  - load_system always present on MOVE turns (fallback working)
+  - engineer_button_id direction prefix always matches move direction (mismatch fixed)
 """
 import sys
 import json
 sys.path.insert(0, "src")
 
 from agents.common.gemini import load_env_file
-from agents.manager.manager import TeamAgentManager
-from agents.captain.agent import ModelCaptainAgent
-from agents.first_mate.agent import ModelFirstMateAgent
-from agents.engineer.agent import ModelEngineerAgent
-from agents.radio_operator.agent import RadioOperatorAgent
-from captain_sonar.game_state import GameState, SubmarineState
-from captain_sonar.map_loader import load_map
-from captain_sonar.actions import order_actions
+from agents.manager.runtime import build_team_agent_manager, build_game_state
 
 load_env_file("src/agents/.env")
 
-NUM_TURNS = 1   # start small — free-tier Gemini is 15 RPM, each turn ~13 calls
+NUM_TURNS = 5
 
-# Build manager with all four model agents
-manager = TeamAgentManager("BLUE")
-manager.register_agent(ModelCaptainAgent("BLUE"), active=True)
-manager.register_agent(ModelFirstMateAgent("BLUE"), active=True)
-manager.register_agent(ModelEngineerAgent("BLUE"), active=True)
-manager.register_agent(RadioOperatorAgent("BLUE"), active=True)
-
-# Build game state directly
-map_data = load_map("assets/maps/default_map.json")
-state = GameState(
-    map_data=map_data,
-    subs={
-        "BLUE": SubmarineState(x=1, y=1),
-        "RED": SubmarineState(x=8, y=8),
-    },
+state = build_game_state(
+    "assets/maps/default_map.json",
+    {"BLUE": (1, 1), "RED": (8, 8)},
 )
+
+manager = build_team_agent_manager("BLUE", use_model_agents=True)
 
 visited: list[tuple[int, int]] = []
 
@@ -45,46 +30,62 @@ for turn_idx in range(NUM_TURNS):
     print(f"TURN {turn_idx + 1}")
     print(f"{'='*60}")
 
-    record = manager.run_turn_cycle(state, max_iterations=1)
-    actions = record.get("actions") or []
+    record = manager.run_turn_cycle(state, max_iterations=2)
 
-    print(f"  Returned {len(actions)} action(s):")
-    for a in actions:
-        print(f"    - type={a.type.name}  actor={a.actor}  payload={a.payload}")
+    accepted = record.get("accepted") or []
+    execution = record.get("execution") or {}
 
-    # Find the MOVE/SURFACE action and validate its shape
-    move_action = next((a for a in actions if a.type.name in ("MOVE", "SURFACE")), None)
-    if move_action and move_action.type.name == "MOVE":
-        direction = move_action.payload.get("direction", "?")
-        charge = move_action.payload.get("charge")
-        bd = move_action.payload.get("breakdown_choice") or {}
-        btn_id = bd.get("button_id")
-        btn_prefix = btn_id.split("-")[0] if btn_id and "-" in btn_id else None
+    # Pull the MOVE/SURFACE action out
+    move_intent = None
+    for a in accepted:
+        if a.get("type") in ("MOVE", "SURFACE"):
+            move_intent = a
+            break
 
-        print(f"\n  Direction : {direction}")
-        print(f"  Charge    : {charge or '(missing)'}")
-        print(f"  Button ID : {btn_id or '(missing)'}")
-        if btn_prefix and btn_prefix != direction:
-            print(f"  !! MISMATCH: button prefix '{btn_prefix}' != direction '{direction}'")
-        elif btn_id and btn_prefix == direction:
-            print(f"  OK Button prefix matches direction")
+    if move_intent:
+        payload = move_intent.get("payload") or {}
+        direction = payload.get("direction", "?")
+        charge = payload.get("charge", "—")
+        bd = payload.get("breakdown_choice") or {}
+        btn_id = bd.get("button_id", "—")
+        btn_prefix = btn_id.split("-")[0] if "-" in btn_id else btn_id
 
-    # Apply actions to the game state
-    success = True
-    err = None
-    try:
-        state.apply_actions(order_actions(actions))
-    except Exception as exc:
-        success = False
-        err = str(exc)
+        print(f"  Action type : {move_intent.get('type')}")
+        print(f"  Direction   : {direction}")
+        print(f"  Charge      : {charge}")
+        print(f"  Button ID   : {btn_id}  (prefix={btn_prefix})")
 
-    print(f"\n  Apply success: {success}")
-    if err:
-        print(f"  Error: {err}")
+        # Checks
+        if move_intent.get("type") == "MOVE":
+            if charge == "—":
+                print("  ⚠ WARNING: load_system missing!")
+            if btn_id == "—":
+                print("  ⚠ WARNING: engineer_button_id missing!")
+            elif btn_prefix != direction:
+                print(f"  !! MISMATCH: button prefix '{btn_prefix}' != direction '{direction}'")
+            else:
+                print(f"  OK Button prefix matches direction")
+    else:
+        print("  (no MOVE/SURFACE in accepted)")
+
+    exec_success = execution.get("success")
+    exec_errors = execution.get("errors") or []
+    exec_actions = execution.get("executed_actions") or []
+    rejected = execution.get("rejected_intents") or []
+
+    print(f"\n  Execution success : {exec_success}")
+    if exec_errors:
+        print(f"  Errors : {exec_errors}")
+    if rejected:
+        print(f"  Rejected intents  : {json.dumps(rejected, indent=4, default=str)}")
 
     # Track position
-    own_sub = state.subs.get("BLUE")
-    pos = (own_sub.x, own_sub.y) if own_sub else ("?", "?")
+    own_sub = (state.subs.get("BLUE") or None)
+    if own_sub is not None and hasattr(own_sub, "x"):
+        pos = (own_sub.x, own_sub.y)
+    else:
+        pos = ("?", "?")
+
     if pos in visited:
         print(f"  !! PATH REVISIT: position {pos} was already visited!")
     else:
@@ -92,5 +93,5 @@ for turn_idx in range(NUM_TURNS):
     visited.append(pos)
 
 print(f"\n{'='*60}")
-print(f"Done - {NUM_TURNS} turn(s) completed")
+print(f"Done — {NUM_TURNS} turns completed")
 print(f"Route: {' -> '.join(str(p) for p in visited)}")
