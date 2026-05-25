@@ -170,10 +170,42 @@ class ModelCaptainAgent(CaptainAgent):
             parts.append("--- PLAY CONTEXT ---\n" + play_context)
         if action_format:
             parts.append("--- ACTION FORMAT ---\n" + action_format)
+
+        inbox = team_view.get("inbox") or []
+        
+        first_mate_suggestion = None
+        engineer_suggestions = {}
+        radio_operator_suggestion = None
+
+        for msg in inbox:
+            sender = msg.get("sender")
+            metadata = msg.get("metadata") or {}
+
+            if sender == "first_mate":
+                first_mate_suggestion = metadata.get("recommended_system") or first_mate_suggestion
+            elif sender == "engineer":
+                recs = metadata.get("recommendations") or {}
+                if isinstance(recs, dict):
+                    engineer_suggestions.update(recs)
+            elif sender == "radio_operator":
+                radio_operator_suggestion = metadata.get("most_likely_sector") or radio_operator_suggestion
+        
+        discussion_parts = []
+        if first_mate_suggestion:
+            discussion_parts.append(f"- **First Mate's Recommended System to Charge**: {first_mate_suggestion}")
+        if engineer_suggestions:
+            btn_strings = [f"{d} -> {b}" for d, b in sorted(engineer_suggestions.items())]
+            discussion_parts.append(f"- **Engineer's Recommended Breakdown Buttons by Direction**:\n  " + "\n  ".join(btn_strings))
+        if radio_operator_suggestion:
+            discussion_parts.append(f"- **Radio Operator's Estimated Enemy Sector**: Sector {radio_operator_suggestion}")
+ 
+        if discussion_parts:
+            crew_discussion_str = "--- CREW DISCUSSION & RECOMMENDATIONS ---\n" + "\n".join(discussion_parts)
+            parts.append(crew_discussion_str)
+        
         role_memory_base = "\n\n".join(parts) if parts else None
 
         model = os.getenv("GEMINI_MODEL") or "gemini-3.1-flash-lite"
-        inbox = team_view.get("inbox") or []
 
         # Defaults used if any phase fails
         direction = _fallback_direction(team_view)
@@ -231,14 +263,17 @@ class ModelCaptainAgent(CaptainAgent):
             json_text = _extract_json_block(p3.text.strip())
             parsed = json.loads(json_text)
 
-            raw_dir = str(parsed.get("direction", direction)).upper()
-            if raw_dir == "SURFACE":
-                direction = raw_dir
-            elif raw_dir in ("N", "S", "E", "W"):
-                valid = _valid_directions(team_view)
-                direction = raw_dir if raw_dir in valid else _fallback_direction(team_view)
-            load_system = parsed.get("load_system") or None
-            engineer_button_id = parsed.get("engineer_button_id") or None
+            if isinstance(parsed, dict):
+                raw_dir = str(parsed.get("direction", direction)).upper()
+
+                if raw_dir == "SURFACE":
+                    direction = raw_dir
+                elif raw_dir in ("N", "S", "E", "W"):
+                    valid = _valid_directions(team_view)
+                    direction = raw_dir if raw_dir in valid else _fallback_direction(team_view)
+
+                load_system = parsed.get("load_system") or None
+                engineer_button_id = parsed.get("engineer_button_id") or None
 
         except Exception:
             pass  # keep fallback values
@@ -257,9 +292,15 @@ class ModelCaptainAgent(CaptainAgent):
             load_system = None
             engineer_button_id = None
         else:
+            if load_system:
+                load_system=str(load_system).lower().strip()
+                if load_system not in _SYSTEM_PRIORITY:
+                    load_system = None
             # Discard engineer_button_id if its direction prefix doesn't match.
-            if engineer_button_id and not engineer_button_id.upper().startswith(direction + "-"):
-                engineer_button_id = None
+            if engineer_button_id: 
+                engineer_button_id = str(engineer_button_id).strip()
+                if not engineer_button_id.upper().startswith(direction + "-"):
+                    engineer_button_id = None
 
         # ── Step 2: Fallback for load_system ─────────────────────────────────
         if not load_system and direction != "SURFACE":

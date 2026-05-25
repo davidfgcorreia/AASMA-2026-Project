@@ -25,7 +25,7 @@ def test_build_turn_start_context_bundle_uses_real_repository_files() -> None:
 
     bundle = build_turn_start_context_bundle(manager, context_report)
 
-    common_root = Path("/home/david/documents/mestrado/AASMA/src/agents")
+    common_root = Path(__file__).resolve().parent.parent / "src" / "agents"
     common_dir = common_root / "common"
 
     assert bundle["play_context"] == (common_dir / "play_context.md").read_text(encoding="utf-8")
