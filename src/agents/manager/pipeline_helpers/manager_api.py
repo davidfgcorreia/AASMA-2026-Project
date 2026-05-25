@@ -20,6 +20,7 @@ from .iteration_orchestrator import (
     run_send_phase,
 )
 from .manager_helpers import write_play_context_for_manager
+from .manager_helpers import summarize_memory
 
 
 def begin_turn(manager, state: GameState, turn_id: int | None = None) -> dict[str, Any]:
@@ -151,7 +152,10 @@ def collect_actions(
     context_report = run_turn_start_phase(manager, state)
     run_discussion_phase(manager, state, max_iterations=max_iterations, deadline_ms=deadline_ms, context_report=context_report)
     accepted = run_finalization_phase(manager)
-    return run_send_phase(manager, accepted, manager.team, phase)
+
+    actions = run_send_phase(manager, accepted, manager.team, phase)
+    summarize_memory(manager, state)
+    return actions
 
 
 def execute_turn_actions(manager, state: GameState, intents: list[dict[str, Any]]) -> dict[str, Any]:

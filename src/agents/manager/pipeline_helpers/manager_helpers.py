@@ -538,6 +538,28 @@ def _upsert_strategy_follow_section(strategy_text: str, updated_section: str) ->
     return "\n\n".join(parts).rstrip() + "\n"
 
 
+MEMORY_SUMMARY_THRESHOLD_CHARS = 2500
+MEMORY_SUMMARY_THRESHOLD_LINES = 80
+
+
+def _memory_needs_summary(content: str) -> bool:
+    line_count = content.count("\n") + (1 if content else 0)
+    return len(content) >= MEMORY_SUMMARY_THRESHOLD_CHARS or line_count >= MEMORY_SUMMARY_THRESHOLD_LINES
+
+
+def _load_memory_summary_prompt() -> str:
+    prompt_path = Path(__file__).resolve().parents[1] / "prompts" / "4_memory_summary.md"
+    return prompt_path.read_text(encoding="utf-8")
+
+
+def _strip_code_fences(text: str) -> str:
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:md|markdown)?\s*", "", cleaned)
+        cleaned = re.sub(r"\s*```$", "", cleaned).strip()
+    return cleaned
+
+
 
 def update_memory(manager, context_report: dict[str, Any]) -> None:
     outputs_dir = Path(__file__).resolve().parents[1] / "outputs"
@@ -584,6 +606,71 @@ def update_memory(manager, context_report: dict[str, Any]) -> None:
     for child in sorted(outputs_dir.iterdir(), key=lambda path: len(path.parts), reverse=True):
         if child.is_dir():
             shutil.rmtree(child, ignore_errors=True)
+
+
+def summarize_memory(manager, state: GameState | None = None) -> dict[str, Any]:
+    base_path = Path(__file__).resolve().parents[2]
+    team = str(getattr(manager, "team", "team") or "team")
+    turn = int(getattr(manager, "_turn_id", getattr(state, "turn", 0)) or 0)
+
+    memory_specs: list[tuple[str, Path]] = [
+        ("MASTER_MEMORY", base_path / "common" / "master_memory.md"),
+        ("CAPTAIN_MEMORY", base_path / "captain" / "memory.md"),
+        ("FIRST_MATE_MEMORY", base_path / "first_mate" / "memory.md"),
+        ("ENGINEER_MEMORY", base_path / "engineer" / "memory.md"),
+    ]
+
+    if not any(_memory_needs_summary(path.read_text(encoding="utf-8") if path.exists() else "") for _, path in memory_specs):
+        return {"summarized": False, "reason": "below_threshold"}
+
+    prompt = _load_memory_summary_prompt()
+    outputs_dir = Path(__file__).resolve().parents[1] / "outputs"
+    outputs_dir.mkdir(parents=True, exist_ok=True)
+
+    model_name = os.getenv("GEMINI_MODEL") or "gemini-3.1-flash-lite"
+    updated_files: dict[str, str] = {}
+    any_summarized = False
+
+    for label, path in memory_specs:
+        current_memory = path.read_text(encoding="utf-8") if path.exists() else ""
+        if not _memory_needs_summary(current_memory):
+            continue
+
+        result = call_agent_activity_with_context(
+            model=model_name,
+            prompt=prompt,
+            context="\n".join([
+                f"# Team: {team}",
+                f"# Turn: {turn}",
+                f"# Memory Type: {label}",
+                current_memory,
+            ]),
+            role="MANAGER",
+            temperature=0.4,
+            max_output_tokens=1024,
+            timeout_seconds=60.0,
+        )
+
+        summarized_text = _strip_code_fences(getattr(result, "text", "") or "")
+        if not summarized_text:
+            continue
+
+        path.write_text(summarized_text.rstrip() + "\n", encoding="utf-8")
+        summary_path = outputs_dir / f"memory_summary_{label.lower()}_{team.replace(' ', '_').lower()}_turn_{turn}.md"
+        summary_path.write_text(summarized_text, encoding="utf-8")
+        updated_files[label] = str(path)
+        any_summarized = True
+
+    if not any_summarized:
+        return {"summarized": False, "reason": "empty_or_invalid_model_output"}
+
+    return {
+        "summarized": True,
+        "sections": updated_files,
+    }
+
+
+sumarize_memory = summarize_memory
 
 
 def now_ms() -> int:
