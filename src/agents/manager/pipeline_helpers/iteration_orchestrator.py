@@ -20,7 +20,9 @@ from typing import Any
 from captain_sonar.actions import Action, ActionType
 from captain_sonar.game_state import GameState
 from .manager_helpers import _extract_section
+from .manager_helpers import answer_communications
 from .manager_helpers import build_turn_start_context_bundle
+from .manager_helpers import extract_communications
 from .manager_helpers import run_discussion_call
 from .manager_helpers import run_strategy_alignment
 from .manager_helpers import write_play_context_for_manager
@@ -136,9 +138,24 @@ def run_iteration_cycle(manager, state: GameState, max_iterations: int = 1, dead
         if isinstance(discussion_results, dict) and discussion_results:
             should_stop_after_iteration = _discussion_requests_early_stop(discussion_results)
 
+        # ── Communications part ───────────────────────────────────────────────
+        # Step 1 — BEFORE update_memory: parse discussion outputs for outbound
+        # questions, group by recipient, and write per-receiver files into
+        # src/agents/manager/communications/. This must happen here because
+        # update_memory deletes the outputs/ directory contents.
+        team = str(bundle.get("team") or "team")
+        comm_turn = int(bundle.get("turn") or 0)
+        by_recipient = extract_communications(team, comm_turn)
+
         update_memory(manager, resolved_context_report)
-        ##comunications part
-   
+
+        # Step 2 — AFTER update_memory: fire a parallel LLM call per recipient
+        # whose context is ONLY the per-recipient communications file (no
+        # play_context). The answers are appended to each asker's memory.md
+        # with attribution and the original question included.
+        if by_recipient:
+            answer_communications(by_recipient, team, comm_turn)
+        # ── end communications part ──────────────────────────────────────────
 
         if should_stop_after_iteration:
             resolved_context_report["early_stop"] = True

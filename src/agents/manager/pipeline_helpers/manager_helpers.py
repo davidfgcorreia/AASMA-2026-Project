@@ -685,3 +685,182 @@ def write_turn_actions_ledger_for_manager(
     omitted: list[dict[str, Any]] | None = None,
 ) -> None:
     return
+
+
+# ─── Inter-agent communications (Q&A) ────────────────────────────────────────
+
+# Section header in discussion outputs that marks a question directed at another role.
+# Example: "## Question to ENGINEER" inside captain_blue_turn_3.md
+_QUESTION_HEADER_RE = re.compile(
+    r"^## Question to ([A-Z_]+)\s*$([\s\S]*?)(?=^##\s+|\Z)",
+    re.MULTILINE,
+)
+
+# Header that the answer LLM is asked to produce, identifying which asker the
+# block is for.  Example: "### To CAPTAIN".
+_ANSWER_BLOCK_RE = re.compile(
+    r"^### To ([A-Z_]+)\s*$([\s\S]*?)(?=^###\s+|\Z)",
+    re.MULTILINE,
+)
+
+_KNOWN_ROLE_NAMES = {role.name for role in AgentRole}
+
+
+def _asker_from_output_filename(file_name: str, team_slug: str) -> str | None:
+    """Infer the asker role name from an output filename like 'captain_blue_turn_3.md'."""
+    suffix = f"_{team_slug}_turn_"
+    if suffix not in file_name:
+        return None
+    candidate = file_name.split(suffix, 1)[0].upper()
+    return candidate if candidate in _KNOWN_ROLE_NAMES else None
+
+
+def extract_communications(team: str, turn: int) -> dict[str, list[tuple[str, str]]]:
+    """Scan discussion outputs for outbound questions, group by recipient, write per-receiver files.
+
+    Must run BEFORE ``update_memory`` because that helper deletes the outputs/
+    directory contents at the end of its execution.
+
+    Returns a mapping ``{recipient_name: [(asker_name, question_body), ...]}``.
+    Also writes ``src/agents/manager/communications/to_<receiver>_<team>_turn_<N>.md``
+    containing one ``## From <ASKER>`` block per incoming question.
+    """
+    base = Path(__file__).resolve().parents[1]
+    outputs_dir = base / "outputs"
+    comms_dir = base / "communications"
+
+    team_slug = str(team or "team").replace(" ", "_").lower()
+    by_recipient: dict[str, list[tuple[str, str]]] = {}
+
+    if not outputs_dir.exists():
+        return by_recipient
+
+    for output_file in sorted(outputs_dir.iterdir()):
+        if not output_file.is_file() or output_file.suffix.lower() != ".md":
+            continue
+        asker = _asker_from_output_filename(output_file.name, team_slug)
+        if not asker:
+            continue
+        try:
+            text = output_file.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        for match in _QUESTION_HEADER_RE.finditer(text):
+            recipient = match.group(1).strip().upper()
+            body = match.group(2).strip()
+            if not body or recipient == asker or recipient not in _KNOWN_ROLE_NAMES:
+                continue
+            by_recipient.setdefault(recipient, []).append((asker, body))
+
+    if not by_recipient:
+        return by_recipient
+
+    comms_dir.mkdir(parents=True, exist_ok=True)
+    for recipient, items in by_recipient.items():
+        recipient_slug = recipient.lower()
+        file_path = comms_dir / f"to_{recipient_slug}_{team_slug}_turn_{turn}.md"
+        parts = [f"# Questions for {recipient} (Team: {team}, Turn: {turn})", ""]
+        for asker, body in items:
+            parts.extend([f"## From {asker}", body, ""])
+        file_path.write_text("\n".join(parts), encoding="utf-8")
+
+    return by_recipient
+
+
+def _answer_one_recipient(
+    recipient: str,
+    comms_file: Path,
+    model_name: str,
+) -> tuple[str, str]:
+    """Run a single LLM answer call for one recipient.  Returns (recipient, answer_text)."""
+    context_text = comms_file.read_text(encoding="utf-8")
+    prompt = (
+        f"You are the {recipient}. Below are questions your teammates directed at you "
+        f"this turn.\n\n"
+        f"Answer each question concisely based on your role's knowledge. Produce one "
+        f"section per asker, in this exact format and using uppercase role names "
+        f"(CAPTAIN, FIRST_MATE, ENGINEER, RADIO_OPERATOR):\n\n"
+        f"### To <ASKER_ROLE>\n"
+        f"Q: <restate the question briefly>\n"
+        f"A: <your concise answer>\n\n"
+        f"Do not include any text outside these sections."
+    )
+    result = call_agent_activity_with_context(
+        model=model_name,
+        prompt=prompt,
+        context=context_text,
+        role=recipient,
+        temperature=0.6,
+        max_output_tokens=512,
+        timeout_seconds=45.0,
+    )
+    return recipient, (getattr(result, "text", "") or "")
+
+
+def answer_communications(
+    by_recipient: dict[str, list[tuple[str, str]]],
+    team: str,
+    turn: int,
+) -> dict[str, str]:
+    """Fire a parallel LLM call per recipient, append each answer to the asker's memory.
+
+    For every recipient that has incoming questions:
+      * load ``communications/to_<recipient>_<team>_turn_<N>.md`` as the LLM context
+      * prompt the LLM to produce ``### To <ASKER>`` blocks (Q:/A:)
+      * for each parsed block, append to ``src/agents/<asker>/memory.md`` as
+        ``### Answer from <RECIPIENT> (Turn N)`` followed by Q:/A:
+
+    Returns ``{recipient: raw_answer_text}`` for inspection/testing.
+    """
+    answers: dict[str, str] = {}
+    if not by_recipient:
+        return answers
+
+    base_role_dirs = Path(__file__).resolve().parents[2]
+    comms_dir = Path(__file__).resolve().parents[1] / "communications"
+    team_slug = str(team or "team").replace(" ", "_").lower()
+    model_name = os.getenv("GEMINI_MODEL") or "gemini-3.1-flash-lite"
+
+    # Build (recipient, file_path) pairs that actually have a file to read
+    jobs: list[tuple[str, Path]] = []
+    for recipient in by_recipient:
+        comms_file = comms_dir / f"to_{recipient.lower()}_{team_slug}_turn_{turn}.md"
+        if comms_file.exists():
+            jobs.append((recipient, comms_file))
+
+    if not jobs:
+        return answers
+
+    # Parallel LLM calls — one per receiver
+    with ThreadPoolExecutor(max_workers=len(jobs)) as executor:
+        futures = {
+            executor.submit(_answer_one_recipient, recipient, comms_file, model_name): recipient
+            for recipient, comms_file in jobs
+        }
+        for future in as_completed(futures):
+            recipient = futures[future]
+            try:
+                _, answer_text = future.result()
+            except Exception:
+                continue
+            answers[recipient] = answer_text
+
+    # Parse answers and append to the askers' memory files
+    for recipient, answer_text in answers.items():
+        for match in _ANSWER_BLOCK_RE.finditer(answer_text):
+            asker = match.group(1).strip().upper()
+            body = match.group(2).strip()
+            if not body or asker not in _KNOWN_ROLE_NAMES:
+                continue
+            memory_path = base_role_dirs / asker.lower() / "memory.md"
+            if not memory_path.parent.exists():
+                continue
+            try:
+                existing = memory_path.read_text(encoding="utf-8") if memory_path.exists() else ""
+            except OSError:
+                existing = ""
+            append_block = f"### Answer from {recipient} (Turn {turn})\n{body}"
+            separator = "\n\n" if existing and not existing.endswith("\n\n") else ""
+            memory_path.write_text(existing + separator + append_block + "\n", encoding="utf-8")
+
+    return answers
