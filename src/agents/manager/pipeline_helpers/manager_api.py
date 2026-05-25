@@ -148,8 +148,8 @@ def collect_actions(
     deadline_ms: int = 0,
     max_iterations: int = 1,
 ) -> list[Action]:
-    run_turn_start_phase(manager, state)
-    run_discussion_phase(manager, state, max_iterations=max_iterations, deadline_ms=deadline_ms)
+    context_report = run_turn_start_phase(manager, state)
+    run_discussion_phase(manager, state, max_iterations=max_iterations, deadline_ms=deadline_ms, context_report=context_report)
     accepted = run_finalization_phase(manager)
     return run_send_phase(manager, accepted, manager.team, phase)
 

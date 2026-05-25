@@ -104,3 +104,58 @@ def test_run_turn_start_call_writes_role_outputs(tmp_path, monkeypatch) -> None:
     assert any("captain context" in entry["context"] for entry in calls)
     assert any("first mate context" in entry["context"] for entry in calls)
     assert any("engineer context" in entry["context"] for entry in calls)
+
+
+def test_run_discussion_call_uses_static_phase_2_prompts(tmp_path, monkeypatch) -> None:
+    repo_root = tmp_path / "repo"
+    src_root = repo_root / "src" / "agents"
+
+    for path in [
+        src_root / "captain" / "prompts",
+        src_root / "first_mate" / "prompts",
+        src_root / "engineer" / "prompts",
+        src_root / "manager" / "contexts",
+        src_root / "manager" / "outputs",
+    ]:
+        path.mkdir(parents=True, exist_ok=True)
+
+    (src_root / "captain" / "prompts" / "2_discussion.md").write_text("captain discussion", encoding="utf-8")
+    (src_root / "first_mate" / "prompts" / "2_system_selection.md").write_text("first mate discussion", encoding="utf-8")
+    (src_root / "engineer" / "prompts" / "2_selection.md").write_text("engineer discussion", encoding="utf-8")
+
+    (src_root / "manager" / "contexts" / "captain_blue.md").write_text("captain context", encoding="utf-8")
+    (src_root / "manager" / "contexts" / "first_mate_blue.md").write_text("first mate context", encoding="utf-8")
+    (src_root / "manager" / "contexts" / "engineer_blue.md").write_text("engineer context", encoding="utf-8")
+
+    fake_file = src_root / "manager" / "pipeline_helpers" / "manager_helpers.py"
+    fake_file.parent.mkdir(parents=True, exist_ok=True)
+    fake_file.write_text("", encoding="utf-8")
+    monkeypatch.setattr(manager_helpers, "__file__", str(fake_file))
+
+    calls: list[dict[str, str]] = []
+
+    def fake_call_agent_activity_with_context(**kwargs):
+        calls.append({
+            "role": str(kwargs["role"]),
+            "prompt": str(kwargs["prompt"]),
+            "context": str(kwargs["context"]),
+        })
+        return type("Response", (), {"text": "discussion output"})()
+
+    monkeypatch.setattr(manager_helpers, "call_agent_activity_with_context", fake_call_agent_activity_with_context)
+
+    bundle = {
+        "team": "BLUE",
+        "turn": 3,
+        "roles": {
+            "CAPTAIN": {},
+            "FIRST_MATE": {},
+            "ENGINEER": {},
+        },
+    }
+
+    results = manager_helpers.run_discussion_call(bundle)
+    assert set(results) == {"CAPTAIN", "FIRST_MATE", "ENGINEER"}
+    assert len(calls) == 3
+    captain_prompt = next(entry["prompt"] for entry in calls if entry["role"] == "CAPTAIN")
+    assert captain_prompt == "captain discussion"

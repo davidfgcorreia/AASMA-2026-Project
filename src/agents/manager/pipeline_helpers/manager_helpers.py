@@ -361,6 +361,184 @@ def run_turn_start_call(bundle: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 
 
+def _load_strategy_alignment_prompt() -> str:
+    prompt_path = Path(__file__).resolve().parents[1] / "prompts" / "3_strategy_alignment.md"
+    return prompt_path.read_text(encoding="utf-8")
+
+
+def _parse_strategy_alignment_payload(output_text: str) -> dict[str, str]:
+    cleaned = output_text.strip()
+    if not cleaned:
+        return {}
+
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+        cleaned = re.sub(r"\s*```$", "", cleaned).strip()
+
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        cleaned = cleaned[start:end + 1]
+
+    payload = json.loads(cleaned)
+    if not isinstance(payload, dict):
+        return {}
+
+    normalized: dict[str, str] = {}
+    for role_name in (AgentRole.CAPTAIN.value, AgentRole.FIRST_MATE.value, AgentRole.ENGINEER.value):
+        raw_value = payload.get(role_name)
+        if isinstance(raw_value, dict):
+            section_text = raw_value.get("strategy_to_follow")
+        else:
+            section_text = raw_value
+        if isinstance(section_text, str) and section_text.strip():
+            normalized[role_name] = section_text.strip()
+    return normalized
+
+
+def run_strategy_alignment(bundle: dict[str, Any]) -> dict[str, Any]:
+    base_path = Path(__file__).resolve().parents[2]
+    outputs_dir = Path(__file__).resolve().parents[1] / "outputs"
+    outputs_dir.mkdir(parents=True, exist_ok=True)
+
+    team = str(bundle.get("team") or "team")
+    turn = int(bundle.get("turn") or 0)
+    team_name = team.replace(" ", "_").lower()
+
+    role_specs: list[tuple[str, Path]] = [
+        (AgentRole.CAPTAIN.value, base_path / "captain" / "strategy.md"),
+        (AgentRole.FIRST_MATE.value, base_path / "first_mate" / "strategy.md"),
+        (AgentRole.ENGINEER.value, base_path / "engineer" / "strategy.md"),
+    ]
+    active_roles = set(bundle.get("roles", {}))
+    role_specs = [
+        (role_name, strategy_path)
+        for role_name, strategy_path in role_specs
+        if role_name in active_roles
+    ]
+
+    if not role_specs:
+        return {"updated": False, "reason": "no_active_roles"}
+
+    role_contexts: list[str] = []
+    role_paths: dict[str, Path] = {}
+
+    for role_name, strategy_path in role_specs:
+        role_slug = role_name.lower()
+        context_path = Path(__file__).resolve().parents[1] / "contexts" / f"{role_slug}_{team_name}.md"
+        if not context_path.exists():
+            return {"updated": False, "reason": "missing_context", "role": role_name}
+
+        context_text = context_path.read_text(encoding="utf-8")
+        role_contexts.append(
+            "\n".join([
+                f"## {role_name}",
+                "### Context",
+                context_text,
+            ])
+        )
+        role_paths[role_name] = strategy_path
+
+    prompt = _load_strategy_alignment_prompt()
+    combined_context = "\n\n".join([
+        f"# Team: {team}",
+        f"# Turn: {turn}",
+        *role_contexts,
+    ])
+
+    model_name = os.getenv("GEMINI_MODEL") or "gemini-3.1-flash-lite"
+    result = call_agent_activity_with_context(
+        model=model_name,
+        prompt=prompt,
+        context=combined_context,
+        role="MANAGER",
+        temperature=0.6,
+        max_output_tokens=2048,
+        timeout_seconds=60.0,
+    )
+
+    updated_sections = _parse_strategy_alignment_payload(getattr(result, "text", "") or "")
+    if not updated_sections:
+        return {"updated": False, "reason": "empty_or_invalid_model_output"}
+
+    output_path = outputs_dir / f"strategy_alignment_{team_name}_turn_{turn}.json"
+    output_path.write_text(json.dumps(updated_sections, indent=2, ensure_ascii=False, sort_keys=True), encoding="utf-8")
+
+    results: dict[str, Any] = {}
+    any_updated = False
+    for role_name, strategy_path in role_paths.items():
+        current_strategy = strategy_path.read_text(encoding="utf-8") if strategy_path.exists() else ""
+        updated_section = updated_sections.get(role_name)
+        if not isinstance(updated_section, str) or not updated_section.strip():
+            results[role_name] = {"updated": False, "reason": "missing_role_output"}
+            continue
+
+        updated_strategy = _upsert_strategy_follow_section(current_strategy, updated_section)
+        strategy_path.write_text(updated_strategy, encoding="utf-8")
+        results[role_name] = {
+            "updated": True,
+            "strategy_path": str(strategy_path),
+            "output_path": str(output_path),
+        }
+        any_updated = True
+
+    return {
+        "updated": any_updated,
+        "output_path": str(output_path),
+        "roles": results,
+    }
+
+
+def run_discussion_call(bundle: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    base_path = Path(__file__).resolve().parents[2]
+    role_specs: list[tuple[str, Path]] = [
+        ("CAPTAIN", base_path / "captain" / "prompts" / "2_discussion.md"),
+        ("FIRST_MATE", base_path / "first_mate" / "prompts" / "2_system_selection.md"),
+        ("ENGINEER", base_path / "engineer" / "prompts" / "2_selection.md"),
+    ]
+    roles_to_run = [
+        (role_name, prompt_path)
+        for role_name, prompt_path in role_specs
+        if role_name in bundle.get("roles", {}) and prompt_path.exists()
+    ]
+
+    if not roles_to_run:
+        return {}
+
+    outputs_dir = Path(__file__).resolve().parents[1] / "outputs"
+    outputs_dir.mkdir(parents=True, exist_ok=True)
+    team = str(bundle.get("team") or "team")
+    turn = int(bundle.get("turn") or 0)
+
+    results: dict[str, dict[str, Any]] = {}
+    with ThreadPoolExecutor(max_workers=len(roles_to_run)) as executor:
+        futures = {
+            executor.submit(_run_turn_start_role, role_name, prompt_path, team, turn, outputs_dir): role_name
+            for role_name, prompt_path in roles_to_run
+        }
+        for future in as_completed(futures):
+            role_name = futures[future]
+            results[role_name] = future.result()
+    return results
+
+
+def _upsert_strategy_follow_section(strategy_text: str, updated_section: str) -> str:
+    marker = "## Strategy to follow:"
+    cleaned_section = updated_section.strip()
+    if not cleaned_section:
+        return strategy_text
+
+    marker_match = re.search(r"^## Strategy to follow:\s*$", strategy_text, flags=re.MULTILINE)
+    if marker_match:
+        prefix = strategy_text[:marker_match.start()].rstrip()
+    else:
+        prefix = strategy_text.rstrip()
+
+    parts = [part for part in (prefix, marker, cleaned_section) if part]
+    return "\n\n".join(parts).rstrip() + "\n"
+
+
+
 def update_memory(manager, context_report: dict[str, Any]) -> None:
     outputs_dir = Path(__file__).resolve().parents[1] / "outputs"
     if not outputs_dir.exists():

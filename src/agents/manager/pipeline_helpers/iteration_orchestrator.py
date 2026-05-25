@@ -19,6 +19,8 @@ from typing import Any
 from captain_sonar.actions import Action, ActionType
 from captain_sonar.game_state import GameState
 from .manager_helpers import build_turn_start_context_bundle
+from .manager_helpers import run_discussion_call
+from .manager_helpers import run_strategy_alignment
 from .manager_helpers import write_play_context_for_manager
 from .manager_helpers import run_turn_start_call
 from .manager_helpers import update_memory
@@ -42,9 +44,9 @@ def run_turn_start_phase(manager, state: GameState) -> dict[str, Any]:
     return context_report
 
 
-def run_discussion_phase(manager, state: GameState, max_iterations: int = 1, deadline_ms: int | None = None) -> list[dict[str, Any]]:
+def run_discussion_phase(manager, state: GameState, max_iterations: int = 1, deadline_ms: int | None = None, context_report: dict[str, Any] | None = None) -> None:
     # Run the bounded iteration cycle using the currently active roles.
-    return run_iteration_cycle(manager, state, max_iterations=max_iterations, deadline_ms=deadline_ms)
+    return run_iteration_cycle(manager, state, max_iterations=max_iterations, deadline_ms=deadline_ms, context_report=context_report)
 
 
 def run_finalization_phase(manager) -> list[dict[str, Any]]:
@@ -93,83 +95,24 @@ def _to_action(default_team: str, payload: object) -> Action | None:
     return Action(actor=actor, type=action_type, payload=normalized_payload)
 
 
-def run_iteration_cycle(manager, state: GameState, max_iterations: int = 1, deadline_ms: int | None = None) -> list[dict[str, Any]]:
-    iterations: list[dict[str, Any]] = []
-    prev_proposals: dict[str, dict[str, Any]] | None = None
+def run_iteration_cycle(manager, state: GameState, max_iterations: int = 1, deadline_ms: int | None = None, context_report: dict[str, Any] | None = None):
+    resolved_context_report: dict[str, Any] = context_report if context_report is not None else {}
 
-    for it in range(max_iterations):
-        proposals: dict[str, dict[str, Any]] = {}
-        # Collect proposals from active agents
-        for role in list(manager._active_roles):
-            agent = manager._agents.get(role)
-            if agent is None:
-                continue
-            try:
-                from .manager_api import build_role_view as manager_build_role_view
+    turn = int(resolved_context_report.get("team_view", {}).get("turn", 0))
 
-                proposal = agent.propose_action(manager_build_role_view(manager, role))
-            except Exception:
-                proposal = {"type": "OMIT", "role": role.value, "turn_id": manager._turn_id}
-            proposals[role.value] = dict(proposal or {})
+    if turn > 0 and turn % 3 == 0:
+        alignment_bundle = build_turn_start_context_bundle(manager, resolved_context_report)
+        resolved_context_report["strategy_alignment"] = run_strategy_alignment(alignment_bundle)
 
-        # Apply any messages embedded in proposals
-        messages_sent = 0
-        for r_name, prop in proposals.items():
-            if not prop:
-                continue
-            msgs = prop.get("messages") or []
-            if not isinstance(msgs, list):
-                continue
-            sender_role = next((rl for rl in manager._agents if rl.value == r_name), None)
-            for msg in msgs:
-                recipient_name = msg.get("recipient")
-                if recipient_name is None:
-                    recipient_role = None
-                else:
-                    recipient_role = next((rl for rl in manager._agents if rl.value == recipient_name), None)
-                text = msg.get("text", "")
-                metadata = msg.get("metadata")
-                if sender_role is not None and text:
-                    from .manager_api import send_message as manager_send_message
+    for iteration in range(max_iterations):
+        # generates the context files for this iteration,
+        bundle = build_turn_start_context_bundle(manager, resolved_context_report)
+        bundle["discussion_results"] = run_discussion_call(bundle)
+        update_memory(manager, resolved_context_report)
 
-                    if manager_send_message(manager, sender_role, recipient_role, text, metadata):
-                        messages_sent += 1
+        ##comunications part
 
-        from .manager_api import read_inbox as manager_read_inbox
+        ## small check if it can ent iteratiosn early        
 
-        inbox_snapshot = {role.value: manager_read_inbox(manager, role) for role in manager._active_roles}
-        iterations.append({"iteration": it, "proposals": proposals, "inbox": inbox_snapshot})
-
-        # Write proposals into the manager's turn action records (votes/proposals)
-        for r, prop in proposals.items():
-            role_obj = next((rl for rl in manager._agents if rl.value == r), None)
-            if role_obj is not None:
-                if prop.get("type") == "OMIT":
-                    from .manager_api import omit_turn_action as manager_omit_turn_action
-
-                    manager_omit_turn_action(manager, role_obj)
-                else:
-                    prop_copy = dict(prop)
-                    prop_copy.pop("messages", None)
-                    from .manager_api import propose_turn_action as manager_propose_turn_action
-
-                    manager_propose_turn_action(manager, role_obj, prop_copy)
-
-        # If there were no messages and proposals didn't change from previous iteration, stop early
-        if messages_sent == 0 and prev_proposals is not None and prev_proposals == proposals:
-            break
-        prev_proposals = proposals
-
-        # let agents observe the updated inboxes before the next iteration
-        for role, agent in manager._agents.items():
-            if role not in manager._active_roles:
-                continue
-            try:
-                from .manager_api import build_role_view as manager_build_role_view
-
-                agent.observe(manager_build_role_view(manager, role))
-            except Exception:
-                # observation failures should not break the manager loop
-                continue
-
-    return iterations
+  
+    return None
