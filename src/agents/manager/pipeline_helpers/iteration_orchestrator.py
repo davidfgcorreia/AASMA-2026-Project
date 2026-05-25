@@ -137,8 +137,68 @@ def run_iteration_cycle(manager, state: GameState, max_iterations: int = 1, dead
             should_stop_after_iteration = _discussion_requests_early_stop(discussion_results)
 
         update_memory(manager, resolved_context_report)
-        ##comunications part
-   
+
+        # ── Communications part ───────────────────────────────────────────────
+        # Lazy imports to avoid circular import with manager_api.
+        from .manager_api import (
+            propose_turn_action as _propose,
+            omit_turn_action as _omit,
+            send_message as _send,
+            build_role_view as _role_view,
+        )
+        from ...base import AgentRole
+
+        # Order: non-Captain roles first so their messages reach the Captain's
+        # inbox BEFORE the Captain calls propose_action in this same iteration.
+        captain_role: AgentRole | None = None
+        non_captain_roles: list[AgentRole] = []
+        for role in manager._active_roles:
+            if role == AgentRole.CAPTAIN:
+                captain_role = role
+            else:
+                non_captain_roles.append(role)
+        ordered_roles = non_captain_roles + ([captain_role] if captain_role is not None else [])
+
+        for role in ordered_roles:
+            agent = manager._agents.get(role)
+            if agent is None:
+                _omit(manager, role)
+                continue
+            try:
+                role_view = _role_view(manager, role)
+                proposal = agent.propose_action(role_view)
+            except Exception:
+                _omit(manager, role)
+                continue
+
+            if not isinstance(proposal, dict):
+                _omit(manager, role)
+                continue
+
+            # Strip and deliver outbound messages BEFORE registering the
+            # proposal — later roles in this same iteration will read them.
+            messages = list(proposal.pop("messages", None) or [])
+            for msg in messages:
+                if not isinstance(msg, dict):
+                    continue
+                recipient_str = str(msg.get("recipient", "")).upper()
+                recipient_role: AgentRole | None = next(
+                    (
+                        r for r in manager._active_roles
+                        if r.value.upper() == recipient_str or r.name.upper() == recipient_str
+                    ),
+                    None,
+                )
+                _send(
+                    manager,
+                    sender=role,
+                    recipient=recipient_role,
+                    text=str(msg.get("text", "")),
+                    metadata=msg.get("metadata"),
+                )
+
+            _propose(manager, role, proposal)
+        # ── end communications part ──────────────────────────────────────────
 
         if should_stop_after_iteration:
             resolved_context_report["early_stop"] = True
