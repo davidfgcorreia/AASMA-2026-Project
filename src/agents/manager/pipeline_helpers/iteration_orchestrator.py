@@ -14,10 +14,12 @@ Public API:
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from captain_sonar.actions import Action, ActionType
 from captain_sonar.game_state import GameState
+from .manager_helpers import _extract_section
 from .manager_helpers import build_turn_start_context_bundle
 from .manager_helpers import run_discussion_call
 from .manager_helpers import run_strategy_alignment
@@ -95,6 +97,26 @@ def _to_action(default_team: str, payload: object) -> Action | None:
     return Action(actor=actor, type=action_type, payload=normalized_payload)
 
 
+def _discussion_requests_early_stop(discussion_results: dict[str, Any]) -> bool:
+    required_roles = ("CAPTAIN", "FIRST_MATE", "ENGINEER")
+    for role_name in required_roles:
+        role_result = discussion_results.get(role_name)
+        output_path = role_result.get("output_path") if isinstance(role_result, dict) else None
+        if not isinstance(output_path, str):
+            return False
+
+        try:
+            output_text = Path(output_path).read_text(encoding="utf-8")
+        except (FileNotFoundError, OSError):
+            return False
+
+        support_stop = _extract_section(output_text, "suport stop").lower()
+        if not support_stop.startswith("yes"):
+            return False
+
+    return True
+
+
 def run_iteration_cycle(manager, state: GameState, max_iterations: int = 1, deadline_ms: int | None = None, context_report: dict[str, Any] | None = None):
     resolved_context_report: dict[str, Any] = context_report if context_report is not None else {}
 
@@ -108,11 +130,19 @@ def run_iteration_cycle(manager, state: GameState, max_iterations: int = 1, dead
         # generates the context files for this iteration,
         bundle = build_turn_start_context_bundle(manager, resolved_context_report)
         bundle["discussion_results"] = run_discussion_call(bundle)
+
+        should_stop_after_iteration = False
+        discussion_results = bundle.get("discussion_results")
+        if isinstance(discussion_results, dict) and discussion_results:
+            should_stop_after_iteration = _discussion_requests_early_stop(discussion_results)
+
         update_memory(manager, resolved_context_report)
-
         ##comunications part
+   
 
-        ## small check if it can ent iteratiosn early        
+        if should_stop_after_iteration:
+            resolved_context_report["early_stop"] = True
+            break
 
   
     return None
