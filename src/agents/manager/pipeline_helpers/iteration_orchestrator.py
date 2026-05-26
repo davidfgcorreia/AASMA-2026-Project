@@ -48,36 +48,21 @@ def run_turn_start_phase(manager, state: GameState) -> dict[str, Any]:
     return context_report
 
 
-def run_discussion_phase(manager, state: GameState, max_iterations: int = 1, deadline_ms: int | None = None, context_report: dict[str, Any] | None = None) -> None:
+def run_discussion_phase(manager, state: GameState, max_iterations: int = 1, context_report: dict[str, Any] | None = None) -> None:
     # Run the bounded iteration cycle using the currently active roles.
-    return run_iteration_cycle(manager, state, max_iterations=max_iterations, deadline_ms=deadline_ms, context_report=context_report)
+    result = run_iteration_cycle(manager, state, max_iterations=max_iterations, context_report=context_report)
+    return result
 
 
 def run_finalization_phase(manager) -> list[dict[str, Any]]:
     from .manager_api import choose_turn_actions as manager_choose_turn_actions
-    return manager_choose_turn_actions(manager)
+    accepted = manager_choose_turn_actions(manager)
+    return accepted
 
 
-def run_send_phase(manager, accepted: list[dict[str, Any]], team: str, phase: str) -> list[Action]:
-    allowed = (
-        {ActionType.MOVE, ActionType.SURFACE}
-        if phase == "move"
-        else {
-            ActionType.SILENCE,
-            ActionType.TORPEDO,
-            ActionType.SONAR,
-            ActionType.DRONE,
-            ActionType.MINE,
-            ActionType.TRIGGER_MINE,
-        }
-    )
-
-    actions: list[Action] = []
-    for proposal in accepted:
-        action = _to_action(team, proposal)
-        if action is not None and action.type in allowed:
-            actions.append(action)
-            break
+def run_send_phase(manager, accepted: list[dict[str, Any]], team: str) -> list[Action]:
+    actions = []
+    ##TODO to be implmeted
     return actions
 
 
@@ -119,7 +104,7 @@ def _discussion_requests_early_stop(discussion_results: dict[str, Any]) -> bool:
     return True
 
 
-def run_iteration_cycle(manager, state: GameState, max_iterations: int = 1, deadline_ms: int | None = None, context_report: dict[str, Any] | None = None):
+def run_iteration_cycle(manager, state: GameState, max_iterations: int = 1, context_report: dict[str, Any] | None = None):
     resolved_context_report: dict[str, Any] = context_report if context_report is not None else {}
 
     turn = int(resolved_context_report.get("team_view", {}).get("turn", 0))

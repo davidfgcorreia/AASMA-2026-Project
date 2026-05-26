@@ -40,6 +40,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--start",
         choices=("default", "swap", "interactive"),
+        default="interactive",
         help="Starting positions: default, swap, or interactive prompt",
     )
     parser.add_argument(

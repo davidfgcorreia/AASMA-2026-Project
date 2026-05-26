@@ -144,7 +144,7 @@ class GameState:
     # PUBLIC API - MAIN GAME FLOW
     # =========================================================================
 
-    def apply_actions(self, ordered_actions: List[Action]) -> None:
+    def apply_actions(self, ordered_actions: List[Action], *, increment_turn: bool = True) -> None:
         """
         Process a batch of actions from all players.
         
@@ -154,7 +154,7 @@ class GameState:
         3. Update game state (damage, gauges, etc.)
         4. Update Radio Operators with new events
         5. Check for game over
-        6. Increment turn
+        6. Increment turn (if requested)
         """
         if self.game_over:
             return
@@ -190,7 +190,8 @@ class GameState:
         self._update_radio_operators()
 
         self._check_game_over()
-        self.turn += 1
+        if increment_turn:
+            self.turn += 1
 
     def system_ready(self, team: str, system: str) -> bool:
         """Check if a system's gauge is fully charged (ready to activate)."""

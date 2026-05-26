@@ -70,6 +70,7 @@ class TeamAgentManager:
         # removed turn iterations and heavy execution record storage to keep manager lightweight
         self._strategy_profile: dict[str, Any] | None = None
         self._last_round_type: str | None = None
+        self._initialize_default_agents()
 
     @property
     def agents(self) -> Mapping[AgentRole, AgentBase]:
@@ -125,6 +126,18 @@ class TeamAgentManager:
             requested_roles=self._active_roles,
             strict=False,
         )
+
+    def _initialize_default_agents(self) -> None:
+        # Import locally to avoid loading agent modules unless needed.
+        from agents.captain.agent import ModelCaptainAgent
+        from agents.first_mate.agent import ModelFirstMateAgent
+        from agents.engineer.agent import ModelEngineerAgent
+        from agents.radio_operator.agent import RadioOperatorAgent
+
+        self.register_agent(ModelCaptainAgent(self.team), active=True)
+        self.register_agent(ModelFirstMateAgent(self.team), active=True)
+        self.register_agent(ModelEngineerAgent(self.team), active=True)
+        self.register_agent(RadioOperatorAgent(self.team), active=True)
 
     def set_active_roles(self, roles: Iterable[AgentRole]) -> None:
         self._active_roles = derive_active_roles(
@@ -201,7 +214,7 @@ class TeamAgentManager:
         """Return a JSON-friendly snapshot of the provided game state."""
         return manager_api.get_state_snapshot(self, state, turn_id=turn_id)
 
-    def run_turn_cycle(self, state: GameState, deadline_ms: int | None = None, max_iterations: int = 1) -> dict[str, Any]:
+    def run_turn_cycle(self, state: GameState) -> dict[str, Any]:
         """Run one turn through the direct manager action pipeline."""
-        actions = manager_api.collect_actions(self, state, "move", deadline_ms=0 if deadline_ms is None else deadline_ms, max_iterations=max_iterations)
+        actions = manager_api.collect_actions(self, state)
         return {"turn_id": state.turn, "actions": actions}

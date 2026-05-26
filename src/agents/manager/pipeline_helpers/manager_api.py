@@ -145,15 +145,13 @@ def read_inbox(manager, role) -> list[dict[str, Any]]:
 def collect_actions(
     manager,
     state: GameState,
-    phase: str,
-    deadline_ms: int = 0,
     max_iterations: int = 1,
 ) -> list[Action]:
     context_report = run_turn_start_phase(manager, state)
-    run_discussion_phase(manager, state, max_iterations=max_iterations, deadline_ms=deadline_ms, context_report=context_report)
+    run_discussion_phase(manager, state, max_iterations=max_iterations, context_report=context_report)
     accepted = run_finalization_phase(manager)
 
-    actions = run_send_phase(manager, accepted, manager.team, phase)
+    actions = run_send_phase(manager, accepted, manager.team)
     summarize_memory(manager, state)
     return actions
 

@@ -290,6 +290,7 @@ def _run_turn_start_role(role_name: str, prompt_path: Path, team: str, turn: int
     output_text = getattr(result, "text", "") or ""
     output_path = outputs_dir / f"{role_slug}_{team_name}_turn_{turn}.md"
     output_path.write_text(output_text, encoding="utf-8")
+    print(f"[manager_helpers] turn_start output role={role_name} path={output_path}\n{output_text}")
 
     return {
         "output_path": str(output_path),
