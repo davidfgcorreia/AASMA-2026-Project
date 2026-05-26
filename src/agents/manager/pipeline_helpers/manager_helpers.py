@@ -865,3 +865,97 @@ def answer_communications(
             memory_path.write_text(existing + separator + append_block + "\n", encoding="utf-8")
 
     return answers
+
+def run_captain_finalization_call(
+    manager,
+    proposals: list[dict[str, Any]],
+    possible_actions: list[dict[str, Any]],
+) -> dict[str, Any]:
+    
+    base_path = Path(__file__).resolve().parents[2]
+    prompt_path = base_path / "captain" / "prompts" / "5_finalization.md"
+    if not prompt_path.exists():
+        return {}
+
+    prompt = prompt_path.read_text(encoding="utf-8").strip()
+
+    # Resolve team / turn from manager state
+    team: str = str(getattr(manager, "team", "team") or "team")
+    turn: int = int(getattr(manager, "_turn_id", 0) or 0)
+    team_name = team.replace(" ", "_").lower()
+
+    context_path = (
+        Path(__file__).resolve().parents[1] / "contexts" / f"captain_{team_name}.md"
+    )
+    base_context = (
+        context_path.read_text(encoding="utf-8") if context_path.exists() else ""
+    )
+
+    proposals_block = (
+        json.dumps(proposals, indent=2, ensure_ascii=False) if proposals else "[]"
+    )
+    possible_block = (
+        json.dumps(possible_actions, indent=2, ensure_ascii=False)
+        if possible_actions
+        else "[]"
+    )
+    live_section = "\n".join([
+        "",
+        "# Finalization Context",
+        "",
+        "## Role Proposals",
+        "```json",
+        proposals_block,
+        "```",
+        "",
+        "## Possible Actions",
+        "```json",
+        possible_block,
+        "```",
+    ])
+    full_context = base_context + live_section
+
+    model_name = os.getenv("GEMINI_MODEL") or "gemini-3.1-flash-lite"
+    result = call_agent_activity_with_context(
+        model=model_name,
+        prompt=prompt,
+        context=full_context,
+        role="CAPTAIN",
+        temperature=0.4,
+        max_output_tokens=512,
+        timeout_seconds=45.0,
+    )
+    output_text: str = getattr(result, "text", "") or ""
+
+    outputs_dir = Path(__file__).resolve().parents[1] / "outputs"
+    outputs_dir.mkdir(parents=True, exist_ok=True)
+    output_path = outputs_dir / f"captain_{team_name}_turn_{turn}.md"
+    output_path.write_text(output_text, encoding="utf-8")
+
+    raw_section = _extract_section(output_text, "Chosen Action").strip()
+    if not raw_section: return {}
+
+    cleaned = raw_section
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+        cleaned = re.sub(r"\s*```$", "", cleaned).strip()
+
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        return {}
+    cleaned = cleaned[start : end + 1]
+
+    try:
+        action = json.loads(cleaned)
+    except json.JSONDecodeError:
+        return {}
+
+    if not isinstance(action, dict) or not isinstance(action.get("type"), str):
+        return {}
+
+    # Normalise: payload must always be a dict
+    if not isinstance(action.get("payload"), dict):
+        action["payload"] = {}
+
+    return {"action": action}

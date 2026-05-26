@@ -3,9 +3,11 @@ from __future__ import annotations
 from typing import Any, Iterable, Mapping, List
 from dataclasses import asdict
 
-from captain_sonar.actions import Action
+from captain_sonar.actions import Action, ActionType
 from captain_sonar.api import get_team_view, snapshot_game_state
 from captain_sonar.game_state import GameState
+
+from .manager_helpers import run_captain_finalization_call
 
 from ..models import AgentMessage, GridPos, StartPositionPicker
 from ..views import build_role_view as _build_role_view
@@ -90,6 +92,20 @@ def omit_turn_action(manager, role) -> bool:
 
 
 def choose_turn_actions(manager) -> list[dict[str, Any]]:
+    """Select the final turn action(s).
+
+    Tries ``choose_turn_actions_by_captain`` first.  Falls back to
+    ``_choose_turn_actions_by_vote`` if the Captain path returns ``None``
+    """
+    captain_result = choose_turn_actions_by_captain(manager)
+    if captain_result is not None:
+        return captain_result
+    return _choose_turn_actions_by_vote(manager)
+
+def _choose_turn_actions_by_vote(manager) -> list[dict[str, Any]]:
+    """Voting-based fallback: returns majority-winning proposals, or all
+    candidates if no majority exists.  Used by ``choose_turn_actions`` when
+    the Captain-led path returns ``None``."""
     active_count = max(1, len(manager._active_roles))
     majority = active_count // 2 + 1
     accepted: list[dict[str, Any]] = []
@@ -129,6 +145,58 @@ def choose_turn_actions(manager) -> list[dict[str, Any]]:
         manager._activation_until_actions_chosen = False
     return accepted
 
+def choose_turn_actions_by_captain(manager) -> list[dict[str, Any]] | None:
+    captain_role = next(
+        (r for r in manager._active_roles if r.value == "CAPTAIN"),
+        None,
+    )
+    if captain_role is None:
+        return None
+
+    proposals_summary: list[dict[str, Any]] = [
+        {"role": role.value, **proposal}
+        for role, proposal in manager._turn_action_proposals.items()
+        if proposal.get("type") != "OMIT"
+    ]
+
+    possible: list[dict[str, Any]] = []
+    try:
+        possible = get_possible_actions(manager, captain_role)
+    except Exception:
+        pass
+
+    try:
+        result = run_captain_finalization_call(
+            manager=manager,
+            proposals=proposals_summary,
+            possible_actions=possible,
+        )
+    except Exception:
+        return None
+
+    if not isinstance(result, dict):
+        return None
+
+    chosen = result.get("action")
+    if not isinstance(chosen, dict):
+        return None
+
+    # Validate action type against the ActionType enum before accepting
+    raw_type = chosen.get("type")
+    if not isinstance(raw_type, str):
+        return None
+    try:
+        ActionType[raw_type.strip().upper()]
+    except KeyError:
+        return None
+
+    accepted = [{"role": "CAPTAIN", **chosen}]
+
+    if manager._activation_until_actions_chosen:
+        manager._activation_deadline_ms = None
+        manager._activation_until_actions_chosen = False
+
+    return accepted
 
 def send_message(manager, sender, recipient, text: str, metadata: dict[str, Any] | None = None) -> bool:
     return _send_message(manager, sender, recipient, text, metadata)
