@@ -575,28 +575,26 @@ def update_memory(manager, context_report: dict[str, Any]) -> None:
 
     for output_file in output_files:
         output_text = output_file.read_text(encoding="utf-8")
+        turn_label = _turn_from_output_filename(output_file.name)
+
         master_update = _extract_section(output_text, "Master Memory Update")
         if master_update:
             role = _role_from_output_filename(output_file.name)
             role_label = role.name.title().replace("_", " ") if role else "Turn"
-            turn_label = _turn_from_output_filename(output_file.name)
             update_master_memory(f"{role_label} Turn {turn_label}", master_update)
 
         role_update = _extract_section(output_text, "Memory Update")
         role = _role_from_output_filename(output_file.name)
         if role and role_update:
-            current_memory = read_role_memory(role)
-            turn_label = _turn_from_output_filename(output_file.name)
+            memory_path = Path(__file__).resolve().parents[2] / role.name.lower() / "memory.md"
+            current_memory = memory_path.read_text(encoding="utf-8") if memory_path.exists() else ""
             reasoning_append = _build_reasoning_append(role, turn_label, role_update)
             new_memory = (
                 (current_memory + "\n\n" + reasoning_append).strip()
                 if current_memory
                 else reasoning_append
             )
-            (Path(__file__).resolve().parents[2] / role.name.lower() / "memory.md").write_text(
-                new_memory,
-                encoding="utf-8",
-            )
+            memory_path.write_text(new_memory, encoding="utf-8")
 
     for output_file in output_files:
         try:

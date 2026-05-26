@@ -113,3 +113,10 @@ coverage.xml
 
 image.png
 
+src/agents/captain/memory.md
+src/agents/common/master_memory.md
+src/agents/engineer/memory.md
+src/agents/first_mate/memory.md
+src/agents/manager/outputs
+src/agents/manager/contexts
+
