@@ -59,10 +59,16 @@ def run_finalization_phase(manager) -> list[dict[str, Any]]:
     accepted = manager_choose_turn_actions(manager)
     return accepted
 
-
 def run_send_phase(manager, accepted: list[dict[str, Any]], team: str) -> list[Action]:
-    actions = []
-    ##TODO to be implmeted
+    SKIP_TYPES = {"OMIT", "END_TURN"}
+    actions: list[Action] = []
+    for proposal in accepted:
+        raw_type = proposal.get("type")
+        if not isinstance(raw_type, str) or raw_type.strip().upper() in SKIP_TYPES:
+            continue
+        action = _to_action(team, proposal)
+        if action is not None:
+            actions.append(action)
     return actions
 
 

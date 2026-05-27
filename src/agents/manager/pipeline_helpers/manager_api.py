@@ -220,7 +220,7 @@ def collect_actions(
     accepted = run_finalization_phase(manager)
 
     actions = run_send_phase(manager, accepted, manager.team)
-    #summarize_memory(manager, state)
+    summarize_memory(manager, state)
     return actions
 
 
