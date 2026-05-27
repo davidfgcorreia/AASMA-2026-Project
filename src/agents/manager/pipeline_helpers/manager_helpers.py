@@ -766,19 +766,82 @@ def extract_communications(team: str, turn: int) -> dict[str, list[tuple[str, st
     return by_recipient
 
 
+def _read_role_file(role_name: str, filename: str) -> str:
+    """Read ``src/agents/<role>/<filename>`` if it exists, else return empty string."""
+    path = Path(__file__).resolve().parents[2] / role_name.lower() / filename
+    if not path.exists():
+        return ""
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+
+
+def _render_answer_context(
+    recipient: str,
+    team: str,
+    turn: int,
+    questions_for_recipient: list[tuple[str, str]],
+) -> str:
+    """Render the per-recipient context block for the answer LLM call.
+
+    Uses the same structure as ``build_turn_start_context_bundle`` writes for
+    each role, but replaces the ``# Play Context`` section with the
+    consolidated questions directed at this recipient. The role's freshly
+    updated memory is included so the recipient can ground its answer in its
+    accumulated turn-over-turn knowledge.
+    """
+    question_parts: list[str] = []
+    for asker, body in questions_for_recipient:
+        question_parts.extend([f"## From {asker}", body, ""])
+    questions_section = "\n".join(question_parts).rstrip()
+
+    context_md = read_role_memory(recipient)
+    strategy_md = _read_role_file(recipient, "strategy.md")
+    memory_md = _read_role_file(recipient, "memory.md")
+    master_memory_md = read_master_memory()
+    common_context_md = read_common_context()
+
+    parts = [
+        f"# Turn Context for {recipient} (team: {team}, turn: {turn})",
+        "",
+        "# Context",
+        context_md,
+        "",
+        "# Strategy",
+        strategy_md,
+        "",
+        "# Memory",
+        memory_md,
+        "",
+        "# Master Memory",
+        master_memory_md,
+        "",
+        "# Common Context",
+        common_context_md,
+        "",
+        "# Questions to Answer",
+        questions_section,
+        "",
+    ]
+    return "\n".join(parts)
+
+
 def _answer_one_recipient(
     recipient: str,
-    comms_file: Path,
+    context_text: str,
     model_name: str,
 ) -> tuple[str, str]:
     """Run a single LLM answer call for one recipient.  Returns (recipient, answer_text)."""
-    context_text = comms_file.read_text(encoding="utf-8")
     prompt = (
-        f"You are the {recipient}. Below are questions your teammates directed at you "
-        f"this turn.\n\n"
-        f"Answer each question concisely based on your role's knowledge. Produce one "
-        f"section per asker, in this exact format and using uppercase role names "
-        f"(CAPTAIN, FIRST_MATE, ENGINEER, RADIO_OPERATOR):\n\n"
+        f"You are the {recipient}. Above this prompt you have your role's Context, "
+        f"Strategy, Memory, Master Memory, Common Context, and a final "
+        f"'# Questions to Answer' section containing questions your teammates "
+        f"directed at you this turn.\n\n"
+        f"Answer each question concisely, grounded in your role's accumulated "
+        f"knowledge from the sections above. Produce one section per asker, in this "
+        f"exact format and using uppercase role names (CAPTAIN, FIRST_MATE, "
+        f"ENGINEER, RADIO_OPERATOR):\n\n"
         f"### To <ASKER_ROLE>\n"
         f"Q: <restate the question briefly>\n"
         f"A: <your concise answer>\n\n"
@@ -803,8 +866,10 @@ def answer_communications(
 ) -> dict[str, str]:
     """Fire a parallel LLM call per recipient, append each answer to the asker's memory.
 
-    For every recipient that has incoming questions:
-      * load ``communications/to_<recipient>_<team>_turn_<N>.md`` as the LLM context
+    For every recipient with incoming questions:
+      * assemble a bundle-style context for that recipient — its own Context,
+        Strategy, Memory, Master Memory, and Common Context — with the
+        consolidated questions replacing the usual ``# Play Context`` section
       * prompt the LLM to produce ``### To <ASKER>`` blocks (Q:/A:)
       * for each parsed block, append to ``src/agents/<asker>/memory.md`` as
         ``### Answer from <RECIPIENT> (Turn N)`` followed by Q:/A:
@@ -816,16 +881,15 @@ def answer_communications(
         return answers
 
     base_role_dirs = Path(__file__).resolve().parents[2]
-    comms_dir = Path(__file__).resolve().parents[1] / "communications"
-    team_slug = str(team or "team").replace(" ", "_").lower()
     model_name = os.getenv("GEMINI_MODEL") or "gemini-3.1-flash-lite"
 
-    # Build (recipient, file_path) pairs that actually have a file to read
-    jobs: list[tuple[str, Path]] = []
-    for recipient in by_recipient:
-        comms_file = comms_dir / f"to_{recipient.lower()}_{team_slug}_turn_{turn}.md"
-        if comms_file.exists():
-            jobs.append((recipient, comms_file))
+    # Build (recipient, assembled_context) pairs — context built from bundle-style data
+    jobs: list[tuple[str, str]] = []
+    for recipient, items in by_recipient.items():
+        if not items:
+            continue
+        context_text = _render_answer_context(recipient, team, turn, items)
+        jobs.append((recipient, context_text))
 
     if not jobs:
         return answers
@@ -833,8 +897,8 @@ def answer_communications(
     # Parallel LLM calls — one per receiver
     with ThreadPoolExecutor(max_workers=len(jobs)) as executor:
         futures = {
-            executor.submit(_answer_one_recipient, recipient, comms_file, model_name): recipient
-            for recipient, comms_file in jobs
+            executor.submit(_answer_one_recipient, recipient, ctx, model_name): recipient
+            for recipient, ctx in jobs
         }
         for future in as_completed(futures):
             recipient = futures[future]
