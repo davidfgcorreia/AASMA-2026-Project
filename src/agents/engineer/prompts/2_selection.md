@@ -1,26 +1,26 @@
 # Phase 2: Button Selection
 
-Using your Phase 1 board analysis, output your per-direction button recommendations as JSON.
+Using your Phase 1 board analysis, confirm the best button guidance and capture any updates.
 
-## Rules
+## Output Format
+Return your response in this exact order and do not add any extra text:
 
-- Pick the safest uncrossed button for each direction.
-- Only include buttons that are not already crossed.
-- If no safe button exists for a direction, omit that direction from recommendations.
-- Set repair_recommended to true only if REPAIR is more urgent than movement.
+```
+## Memory Update
+[Write the text that should be appended to the Engineer memory file for this turn.]
 
-## Required JSON shape
+## Master Memory Update
+[Write the text that should be appended to the shared master memory for this turn.]
 
-```json
-{
-  "recommendations": {
-    "N": "N-not-green-0",
-    "S": "S-down-green-4",
-    "E": "E-not-green-1",
-    "W": "W-not-green-0"
-  },
-  "repair_recommended": false
-}
+## Question to <ROLE>
+[question text]
+
+## Support Stop
+[yes or no support end discussion all is discussed]
 ```
 
-Return valid JSON only. No commentary outside the JSON block.
+## Content Rules
+- Keep the memory updates concise and directly usable.
+- Use "## Question to <ROLE>" headers so the manager can extract questions.
+- If you have no questions, omit all question sections.
+- Support Stop must be either "yes" or "no".

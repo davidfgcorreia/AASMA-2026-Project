@@ -91,74 +91,22 @@ def omit_turn_action(manager, role) -> bool:
     return True
 
 
-def choose_turn_actions(manager) -> list[dict[str, Any]]:
+def choose_turn_actions(manager, resolved_context_report: dict[str, Any]) -> list[dict[str, Any]]:
     """Select the final turn action(s).
 
     Tries ``choose_turn_actions_by_captain`` first.  Falls back to
     ``_choose_turn_actions_by_vote`` if the Captain path returns ``None``
     """
-    captain_result = choose_turn_actions_by_captain(manager)
-    if captain_result is not None:
-        return captain_result
-    return _choose_turn_actions_by_vote(manager)
+    print("Choosing turn actions...")
+    return choose_turn_actions_by_captain(manager, resolved_context_report)
 
-def _choose_turn_actions_by_vote(manager) -> list[dict[str, Any]]:
-    """Voting-based fallback: returns majority-winning proposals, or all
-    candidates if no majority exists.  Used by ``choose_turn_actions`` when
-    the Captain-led path returns ``None``."""
-    active_count = max(1, len(manager._active_roles))
-    majority = active_count // 2 + 1
-    accepted: list[dict[str, Any]] = []
-    omitted: list[dict[str, Any]] = []
 
-    votes_by_signature = {signature: len(voters) for signature, voters in manager._turn_action_votes.items()}
-
-    majority_winners: list[dict[str, Any]] = []
-    fallback_candidates: list[dict[str, Any]] = []
-
-    for role, proposal in manager._turn_action_proposals.items():
-        if proposal.get("type") == "OMIT":
-            omitted.append({"role": role.value, **proposal})
-            continue
-        signature = action_signature(proposal)
-        if votes_by_signature.get(signature, 0) >= majority:
-            majority_winners.append({"role": role.value, **proposal})
-        else:
-            fallback_candidates.append({"role": role.value, **proposal})
-
-    # If a majority of active roles explicitly omit, no actions are accepted
-    if len(omitted) >= majority:
-        accepted = []
-    elif majority_winners:
-        omitted.extend(fallback_candidates)
-        accepted = majority_winners
-    else:
-        accepted = fallback_candidates
-
-    real_actions = [p for p in accepted if p.get("type") != "END_TURN"]
-    if real_actions:
-        omitted.extend(p for p in accepted if p.get("type") == "END_TURN")
-        accepted = real_actions
-
-    if manager._activation_until_actions_chosen:
-        manager._activation_deadline_ms = None
-        manager._activation_until_actions_chosen = False
-    return accepted
-
-def choose_turn_actions_by_captain(manager) -> list[dict[str, Any]] | None:
+def choose_turn_actions_by_captain(manager, resolved_context_report: dict[str, Any]) -> list[dict[str, Any]]:
+    print ("Attempting to choose turn actions by Captain...")
     captain_role = next(
         (r for r in manager._active_roles if r.value == "CAPTAIN"),
         None,
     )
-    if captain_role is None:
-        return None
-
-    proposals_summary: list[dict[str, Any]] = [
-        {"role": role.value, **proposal}
-        for role, proposal in manager._turn_action_proposals.items()
-        if proposal.get("type") != "OMIT"
-    ]
-
     possible: list[dict[str, Any]] = []
     try:
         possible = get_possible_actions(manager, captain_role)
@@ -168,27 +116,27 @@ def choose_turn_actions_by_captain(manager) -> list[dict[str, Any]] | None:
     try:
         result = run_captain_finalization_call(
             manager=manager,
-            proposals=proposals_summary,
             possible_actions=possible,
+            resolved_context_report=resolved_context_report
         )
     except Exception:
-        return None
+        return []
 
     if not isinstance(result, dict):
-        return None
+        return []
 
     chosen = result.get("action")
     if not isinstance(chosen, dict):
-        return None
+        return []
 
     # Validate action type against the ActionType enum before accepting
     raw_type = chosen.get("type")
     if not isinstance(raw_type, str):
-        return None
+        return []
     try:
         ActionType[raw_type.strip().upper()]
     except KeyError:
-        return None
+        return []
 
     accepted = [{"role": "CAPTAIN", **chosen}]
 
@@ -217,10 +165,10 @@ def collect_actions(
 ) -> list[Action]:
     context_report = run_turn_start_phase(manager, state)
     run_discussion_phase(manager, state, max_iterations=max_iterations, context_report=context_report)
-    accepted = run_finalization_phase(manager)
+    accepted = run_finalization_phase(manager, context_report)
 
     actions = run_send_phase(manager, accepted, manager.team)
-    summarize_memory(manager, state)
+    #summarize_memory(manager, state)
     return actions
 
 

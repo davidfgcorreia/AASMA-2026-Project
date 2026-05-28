@@ -44,7 +44,7 @@ def run_turn_start_phase(manager, state: GameState) -> dict[str, Any]:
     )
     bundle = build_turn_start_context_bundle(manager, context_report)
     bundle["turn_start_results"] = run_turn_start_call(bundle)
-    update_memory(manager, context_report)
+    update_memory(manager, context_report,0)
     return context_report
 
 
@@ -54,9 +54,9 @@ def run_discussion_phase(manager, state: GameState, max_iterations: int = 1, con
     return result
 
 
-def run_finalization_phase(manager) -> list[dict[str, Any]]:
+def run_finalization_phase(manager, resolved_context_report: dict[str, Any]) -> list[dict[str, Any]]:
     from .manager_api import choose_turn_actions as manager_choose_turn_actions
-    accepted = manager_choose_turn_actions(manager)
+    accepted = manager_choose_turn_actions(manager, resolved_context_report)
     return accepted
 
 def run_send_phase(manager, accepted: list[dict[str, Any]], team: str) -> list[Action]:
@@ -110,12 +110,19 @@ def _discussion_requests_early_stop(discussion_results: dict[str, Any]) -> bool:
     return True
 
 
-def run_iteration_cycle(manager, state: GameState, max_iterations: int = 1, context_report: dict[str, Any] | None = None):
+def run_iteration_cycle(manager, state: GameState, max_iterations: int, context_report: dict[str, Any] | None = None):
     resolved_context_report: dict[str, Any] = context_report if context_report is not None else {}
 
     turn = int(resolved_context_report.get("team_view", {}).get("turn", 0))
 
-    if turn > 0 and turn % 3 == 0:
+    team = str(resolved_context_report.get("team_view", {}).get("team", "")).lower()
+    should_align = False
+    if team == "blue":
+        should_align = (turn % 6) == 0
+    elif team == "red":
+        should_align = (turn % 6) == 1
+
+    if should_align:
         alignment_bundle = build_turn_start_context_bundle(manager, resolved_context_report)
         resolved_context_report["strategy_alignment"] = run_strategy_alignment(alignment_bundle)
 
@@ -138,7 +145,7 @@ def run_iteration_cycle(manager, state: GameState, max_iterations: int = 1, cont
         comm_turn = int(bundle.get("turn") or 0)
         by_recipient = extract_communications(team, comm_turn)
 
-        update_memory(manager, resolved_context_report)
+        update_memory(manager, resolved_context_report, discussion_update=iteration+1)
 
         # Step 2 — AFTER update_memory: fire a parallel LLM call per recipient
         # whose context is ONLY the per-recipient communications file (no
@@ -150,6 +157,7 @@ def run_iteration_cycle(manager, state: GameState, max_iterations: int = 1, cont
 
         if should_stop_after_iteration:
             resolved_context_report["early_stop"] = True
+            print(f"Iteration {iteration+1}: Early stop requested by discussion outputs.")
             break
 
   

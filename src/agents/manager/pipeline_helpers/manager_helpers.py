@@ -323,9 +323,11 @@ def _turn_from_output_filename(file_name: str) -> str:
     return match.group(1) if match else "unknown"
 
 
-def _build_reasoning_append(role: AgentRole | None, turn_label: str, content: str) -> str:
+def _build_reasoning_append(role: AgentRole | None, turn_label: str, content: str, discussion_update: int) -> str:
     role_label = role.name.title().replace("_", " ") if role else "Turn"
     cleaned_content = content.strip()
+    if discussion_update > 0:
+        return f"## {role_label} Turn {turn_label} Discussion Update {discussion_update}\n\n{cleaned_content}"
     return f"## {role_label} Turn {turn_label} Reasoning\n\n{cleaned_content}" if cleaned_content else ""
 
 
@@ -562,7 +564,7 @@ def _strip_code_fences(text: str) -> str:
 
 
 
-def update_memory(manager, context_report: dict[str, Any]) -> None:
+def update_memory(manager, context_report: dict[str, Any], discussion_update: int) -> None:
     outputs_dir = Path(__file__).resolve().parents[1] / "outputs"
     if not outputs_dir.exists():
         return
@@ -578,17 +580,22 @@ def update_memory(manager, context_report: dict[str, Any]) -> None:
         turn_label = _turn_from_output_filename(output_file.name)
 
         master_update = _extract_section(output_text, "Master Memory Update")
+
+        print(f"[manager_helpers] turn_start discussion update={discussion_update} role_output={output_file.name} master_update_length={len(master_update)} role_update_length={len(_extract_section(output_text, 'Memory Update'))}")
         if master_update:
             role = _role_from_output_filename(output_file.name)
             role_label = role.name.title().replace("_", " ") if role else "Turn"
-            update_master_memory(f"{role_label} Turn {turn_label}", master_update)
+            newturn_label = turn_label
+            if discussion_update > 0:
+                newturn_label = f"{turn_label} Discussion Update {discussion_update}"
+            update_master_memory(f"{role_label} Turn {newturn_label}", master_update)
 
         role_update = _extract_section(output_text, "Memory Update")
         role = _role_from_output_filename(output_file.name)
         if role and role_update:
             memory_path = Path(__file__).resolve().parents[2] / role.name.lower() / "memory.md"
             current_memory = memory_path.read_text(encoding="utf-8") if memory_path.exists() else ""
-            reasoning_append = _build_reasoning_append(role, turn_label, role_update)
+            reasoning_append = _build_reasoning_append(role, turn_label, role_update, discussion_update)
             new_memory = (
                 (current_memory + "\n\n" + reasoning_append).strip()
                 if current_memory
@@ -930,14 +937,14 @@ def answer_communications(
 
 def run_captain_finalization_call(
     manager,
-    proposals: list[dict[str, Any]],
     possible_actions: list[dict[str, Any]],
+    resolved_context_report: dict[str, Any],
 ) -> dict[str, Any]:
     
+
+    
     base_path = Path(__file__).resolve().parents[2]
-    prompt_path = base_path / "captain" / "prompts" / "5_finalization.md"
-    if not prompt_path.exists():
-        return {}
+    prompt_path = base_path / "manager" / "prompts" / "5_finalization.md"
 
     prompt = prompt_path.read_text(encoding="utf-8").strip()
 
@@ -946,15 +953,13 @@ def run_captain_finalization_call(
     turn: int = int(getattr(manager, "_turn_id", 0) or 0)
     team_name = team.replace(" ", "_").lower()
 
+    bundle = build_turn_start_context_bundle(manager, resolved_context_report)
+
     context_path = (
         Path(__file__).resolve().parents[1] / "contexts" / f"captain_{team_name}.md"
     )
     base_context = (
         context_path.read_text(encoding="utf-8") if context_path.exists() else ""
-    )
-
-    proposals_block = (
-        json.dumps(proposals, indent=2, ensure_ascii=False) if proposals else "[]"
     )
     possible_block = (
         json.dumps(possible_actions, indent=2, ensure_ascii=False)
@@ -963,19 +968,14 @@ def run_captain_finalization_call(
     )
     live_section = "\n".join([
         "",
-        "# Finalization Context",
-        "",
-        "## Role Proposals",
-        "```json",
-        proposals_block,
-        "```",
-        "",
         "## Possible Actions",
         "```json",
         possible_block,
         "```",
     ])
-    full_context = base_context + live_section
+    full_context = base_context
+
+    print(f" [hellper] full_context for captain finalization call:\n{full_context}")
 
     model_name = os.getenv("GEMINI_MODEL") or "gemini-3.1-flash-lite"
     result = call_agent_activity_with_context(
@@ -988,6 +988,8 @@ def run_captain_finalization_call(
         timeout_seconds=45.0,
     )
     output_text: str = getattr(result, "text", "") or ""
+
+    print(f"[manager_helpers] captain finalization output path=captain_{team_name}_turn_{turn}.md\n{output_text}")
 
     outputs_dir = Path(__file__).resolve().parents[1] / "outputs"
     outputs_dir.mkdir(parents=True, exist_ok=True)

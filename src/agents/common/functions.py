@@ -118,30 +118,12 @@ def update_master_memory(section: str, content: str, base_path: str | Path | Non
     """Update or append a section in the shared team memory file."""
     memory_text = read_master_memory(base_path)
     section_header = f"## {section}"
-    lines = memory_text.splitlines()
-    updated: list[str] = []
-    index = 0
-
-    while index < len(lines):
-        line = lines[index]
-        if line.strip() == section_header:
-            updated.append(line)
-            updated.append("")
-            updated.extend(content.strip().splitlines())
-            index += 1
-            while index < len(lines) and not lines[index].startswith("## "):
-                index += 1
-            continue
-
-        updated.append(line)
-        index += 1
-
-    if section_header not in memory_text:
-        if updated and updated[-1] != "":
-            updated.append("")
-        updated.append(section_header)
+    updated = memory_text.splitlines()
+    if updated and updated[-1] != "":
         updated.append("")
-        updated.extend(content.strip().splitlines())
+    updated.append(section_header)
+    updated.append("")
+    updated.extend(content.strip().splitlines())
 
     new_text = "\n".join(updated).rstrip() + "\n"
     write_master_memory(new_text, base_path)
