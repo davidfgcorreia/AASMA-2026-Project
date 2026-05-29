@@ -173,6 +173,8 @@ def collect_actions(
     state: GameState,
     max_iterations: int = 1,
 ) -> list[Action]:
+    rotation = int(getattr(manager, "_api_rotation_counter", 0) or 0)
+    setattr(manager, "_api_rotation_counter", rotation)
     context_report = run_turn_start_phase(manager, state)
     run_discussion_phase(manager, state, max_iterations=max_iterations, context_report=context_report)
     accepted = run_finalization_phase(manager, context_report)

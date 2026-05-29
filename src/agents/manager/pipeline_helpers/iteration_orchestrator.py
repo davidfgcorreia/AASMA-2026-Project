@@ -32,6 +32,7 @@ from .manager_helpers import update_memory
 # circular import problems between this module and `manager_api`.
 
 
+
 def run_turn_start_phase(manager, state: GameState) -> dict[str, Any]:
     from .manager_api import begin_turn as manager_begin_turn
 
@@ -43,7 +44,7 @@ def run_turn_start_phase(manager, state: GameState) -> dict[str, Any]:
         source=context_report["source"],
     )
     bundle = build_turn_start_context_bundle(manager, context_report)
-    bundle["turn_start_results"] = run_turn_start_call(bundle)
+    bundle["turn_start_results"] = run_turn_start_call(manager, bundle)
     update_memory(manager, context_report,0)
     return context_report
 
@@ -126,12 +127,12 @@ def run_iteration_cycle(manager, state: GameState, max_iterations: int, context_
 
     if should_align:
         alignment_bundle = build_turn_start_context_bundle(manager, resolved_context_report)
-        resolved_context_report["strategy_alignment"] = run_strategy_alignment(alignment_bundle)
+        resolved_context_report["strategy_alignment"] = run_strategy_alignment(manager, alignment_bundle)
 
     for iteration in range(max_iterations):
         # generates the context files for this iteration,
         bundle = build_turn_start_context_bundle(manager, resolved_context_report)
-        bundle["discussion_results"] = run_discussion_call(bundle)
+        bundle["discussion_results"] = run_discussion_call(manager, bundle)
 
         should_stop_after_iteration = False
         discussion_results = bundle.get("discussion_results")
@@ -154,7 +155,7 @@ def run_iteration_cycle(manager, state: GameState, max_iterations: int, context_
         # play_context). The answers are appended to each asker's memory.md
         # with attribution and the original question included.
         if by_recipient:
-            answer_communications(by_recipient, team, comm_turn)
+            answer_communications(manager, by_recipient, team, comm_turn)
         # ── end communications part ──────────────────────────────────────────
 
         if should_stop_after_iteration:

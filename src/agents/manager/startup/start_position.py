@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from captain_sonar.map_loader import MapData
 from agents.common.functions import call_agent_activity_with_context
+from agents.common.gemini import load_env_file
 from pathlib import Path
 import os
 import re
@@ -36,6 +37,8 @@ def start_position(map_data: MapData):
     prompt = prompt_path.read_text(encoding="utf-8")
     context = context_path.read_text(encoding="utf-8") if context_path.exists() else ""
 
+    api_key = _get_last_gemini_api_key()
+
 
     # Use the common call_agent_activity helper so provider keys and context are handled
     model = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
@@ -46,6 +49,7 @@ def start_position(map_data: MapData):
             prompt=prompt,
             context=context,
             role=role,
+            api_key=api_key,
             temperature=1,
             max_output_tokens=256,
             timeout_seconds=30.0
@@ -93,6 +97,21 @@ def start_position(map_data: MapData):
 
 
     return (x, y)
+
+
+def _get_last_gemini_api_key() -> str | None:
+    load_env_file()
+    keys: list[str] = []
+    index = 1
+    while True:
+        value = os.getenv(f"GEMINI_API_KEY{index}")
+        if not value:
+            break
+        keys.append(value)
+        index += 1
+    if keys:
+        return keys[-1]
+    return None
 
 
 

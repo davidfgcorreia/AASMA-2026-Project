@@ -18,6 +18,7 @@ from agents.common.functions import (
     read_role_memory,
     update_master_memory,
 )
+from agents.common.gemini import load_env_file
 
 
 def _render_trajectory_map(team_view: dict[str, Any]) -> str:
@@ -80,6 +81,29 @@ def _render_belief_map(team_view: dict[str, Any]) -> str:
         rows.append(" ".join(rendered_cells))
 
     return "\n".join(rows) if rows else "(no belief map)"
+
+
+def _load_rotating_keys() -> list[str]:
+    keys: list[str] = []
+    index = 1
+    while True:
+        value = os.getenv(f"GEMINI_API_KEY{index}")
+        if not value:
+            break
+        keys.append(value)
+        index += 1
+    return keys
+
+
+def _select_api_key(manager) -> str | None:
+    load_env_file()
+    keys = _load_rotating_keys()
+    if not keys:
+        return None
+    counter = int(getattr(manager, "_api_rotation_counter", 0) or 0)
+    key = keys[counter % len(keys)]
+    setattr(manager, "_api_rotation_counter", counter + 1)
+    return key
 
 
 def _render_engineer_board(team_view: dict[str, Any]) -> list[str]:
@@ -270,7 +294,14 @@ def write_play_context_for_manager(manager, team_view: dict[str, Any], *, round_
     play_context_path.write_text(render_play_context(team_view, round_type=round_type, source=source), encoding="utf-8")
     return str(play_context_path)
 
-def _run_turn_start_role(role_name: str, prompt_path: Path, team: str, turn: int, outputs_dir: Path) -> dict[str, Any]:
+def _run_turn_start_role(
+    manager,
+    role_name: str,
+    prompt_path: Path,
+    team: str,
+    turn: int,
+    outputs_dir: Path,
+) -> dict[str, Any]:
     prompt = prompt_path.read_text(encoding="utf-8").strip()
     team_name = str(team or "team").replace(" ", "_").lower()
     role_slug = str(role_name).replace(" ", "_").lower()
@@ -283,6 +314,7 @@ def _run_turn_start_role(role_name: str, prompt_path: Path, team: str, turn: int
         prompt=prompt,
         context=context_text,
         role=role_name,
+        api_key=_select_api_key(manager),
         temperature=0.7,
         max_output_tokens=512,
         timeout_seconds=45.0,
@@ -331,7 +363,7 @@ def _build_reasoning_append(role: AgentRole | None, turn_label: str, content: st
     return f"## {role_label} Turn {turn_label} Reasoning\n\n{cleaned_content}" if cleaned_content else ""
 
 
-def run_turn_start_call(bundle: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def run_turn_start_call(manager, bundle: dict[str, Any]) -> dict[str, dict[str, Any]]:
     base_path = Path(__file__).resolve().parents[2]
     role_specs: list[tuple[str, Path]] = [
         ("CAPTAIN", base_path / "captain" / "prompts" / "1_analysis.md"),
@@ -354,7 +386,7 @@ def run_turn_start_call(bundle: dict[str, Any]) -> dict[str, dict[str, Any]]:
     results: dict[str, dict[str, Any]] = {}
     with ThreadPoolExecutor(max_workers=len(roles_to_run)) as executor:
         futures = {
-            executor.submit(_run_turn_start_role, role_name, prompt_path, team, turn, outputs_dir): role_name
+            executor.submit(_run_turn_start_role, manager, role_name, prompt_path, team, turn, outputs_dir): role_name
             for role_name, prompt_path in roles_to_run
         }
         for future in as_completed(futures):
@@ -399,7 +431,7 @@ def _parse_strategy_alignment_payload(output_text: str) -> dict[str, str]:
     return normalized
 
 
-def run_strategy_alignment(bundle: dict[str, Any]) -> dict[str, Any]:
+def run_strategy_alignment(manager, bundle: dict[str, Any]) -> dict[str, Any]:
     base_path = Path(__file__).resolve().parents[2]
     outputs_dir = Path(__file__).resolve().parents[1] / "outputs"
     outputs_dir.mkdir(parents=True, exist_ok=True)
@@ -455,6 +487,7 @@ def run_strategy_alignment(bundle: dict[str, Any]) -> dict[str, Any]:
         prompt=prompt,
         context=combined_context,
         role="MANAGER",
+        api_key=_select_api_key(manager),
         temperature=0.6,
         max_output_tokens=2048,
         timeout_seconds=60.0,
@@ -492,7 +525,7 @@ def run_strategy_alignment(bundle: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def run_discussion_call(bundle: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def run_discussion_call(manager, bundle: dict[str, Any]) -> dict[str, dict[str, Any]]:
     base_path = Path(__file__).resolve().parents[2]
     role_specs: list[tuple[str, Path]] = [
         ("CAPTAIN", base_path / "captain" / "prompts" / "2_discussion.md"),
@@ -516,7 +549,7 @@ def run_discussion_call(bundle: dict[str, Any]) -> dict[str, dict[str, Any]]:
     results: dict[str, dict[str, Any]] = {}
     with ThreadPoolExecutor(max_workers=len(roles_to_run)) as executor:
         futures = {
-            executor.submit(_run_turn_start_role, role_name, prompt_path, team, turn, outputs_dir): role_name
+            executor.submit(_run_turn_start_role, manager, role_name, prompt_path, team, turn, outputs_dir): role_name
             for role_name, prompt_path in roles_to_run
         }
         for future in as_completed(futures):
@@ -590,7 +623,11 @@ def update_memory(manager, context_report: dict[str, Any], discussion_update: in
             newturn_label = turn_label
             if discussion_update > 0:
                 newturn_label = f"{turn_label} Discussion Update {discussion_update}"
-            update_master_memory(f"{role_label} Turn {newturn_label}", master_update)
+            master_path = Path(__file__).resolve().parents[2] / "common" / "master_memory.md"
+            existing_master = master_path.read_text(encoding="utf-8") if master_path.exists() else ""
+            master_block = f"## {role_label} Turn {newturn_label}\n\n{master_update.strip()}"
+            separator = "\n\n" if existing_master and not existing_master.endswith("\n\n") else ""
+            master_path.write_text(existing_master + separator + master_block + "\n", encoding="utf-8")
 
         role_update = _extract_section(output_text, "Memory Update")
         role = _role_from_output_filename(output_file.name)
@@ -598,12 +635,9 @@ def update_memory(manager, context_report: dict[str, Any], discussion_update: in
             memory_path = Path(__file__).resolve().parents[2] / role.name.lower() / "memory.md"
             current_memory = memory_path.read_text(encoding="utf-8") if memory_path.exists() else ""
             reasoning_append = _build_reasoning_append(role, turn_label, role_update, discussion_update)
-            new_memory = (
-                (current_memory + "\n\n" + reasoning_append).strip()
-                if current_memory
-                else reasoning_append
-            )
-            memory_path.write_text(new_memory, encoding="utf-8")
+            if reasoning_append:
+                separator = "\n\n" if current_memory and not current_memory.endswith("\n\n") else ""
+                memory_path.write_text(current_memory + separator + reasoning_append + "\n", encoding="utf-8")
 
     for output_file in output_files:
         try:
@@ -665,6 +699,7 @@ def summarize_memory(manager, state: GameState | None = None) -> dict[str, Any]:
                 current_memory,
             ]),
             role="MANAGER",
+            api_key=_select_api_key(manager),
             temperature=0.4,
             max_output_tokens=1024,
             timeout_seconds=60.0,
@@ -848,6 +883,7 @@ def _render_answer_context(
 
 
 def _answer_one_recipient(
+    manager,
     recipient: str,
     context_text: str,
     model_name: str,
@@ -872,6 +908,7 @@ def _answer_one_recipient(
         prompt=prompt,
         context=context_text,
         role=recipient,
+        api_key=_select_api_key(manager),
         temperature=0.6,
         max_output_tokens=512,
         timeout_seconds=45.0,
@@ -880,6 +917,7 @@ def _answer_one_recipient(
 
 
 def answer_communications(
+    manager,
     by_recipient: dict[str, list[tuple[str, str]]],
     team: str,
     turn: int,
@@ -917,7 +955,7 @@ def answer_communications(
     # Parallel LLM calls — one per receiver
     with ThreadPoolExecutor(max_workers=len(jobs)) as executor:
         futures = {
-            executor.submit(_answer_one_recipient, recipient, ctx, model_name): recipient
+            executor.submit(_answer_one_recipient, manager, recipient, ctx, model_name): recipient
             for recipient, ctx in jobs
         }
         for future in as_completed(futures):
@@ -995,6 +1033,7 @@ def run_captain_finalization_call(
         prompt=prompt,
         context=full_context,
         role="CAPTAIN",
+        api_key=_select_api_key(manager),
         temperature=0.4,
         max_output_tokens=512,
         timeout_seconds=45.0,
