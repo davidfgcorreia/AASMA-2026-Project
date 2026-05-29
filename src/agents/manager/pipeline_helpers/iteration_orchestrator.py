@@ -62,6 +62,7 @@ def run_finalization_phase(manager, resolved_context_report: dict[str, Any]) -> 
 def run_send_phase(manager, accepted: list[dict[str, Any]], team: str) -> list[Action]:
     SKIP_TYPES = {"OMIT", "END_TURN"}
     actions: list[Action] = []
+    print(f"[iteration_orchestrator] run_send_phase accepted={accepted}")
     for proposal in accepted:
         raw_type = proposal.get("type")
         if not isinstance(raw_type, str) or raw_type.strip().upper() in SKIP_TYPES:
@@ -69,6 +70,7 @@ def run_send_phase(manager, accepted: list[dict[str, Any]], team: str) -> list[A
         action = _to_action(team, proposal)
         if action is not None:
             actions.append(action)
+    print(f"[iteration_orchestrator] run_send_phase actions={actions}")
     return actions
 
 

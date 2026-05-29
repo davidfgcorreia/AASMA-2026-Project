@@ -33,6 +33,8 @@ class ManagerGameApiAdapter:
         errors: list[str] = []
         seen_signatures: set[str] = set()
 
+        print(f"[manager_api_adapter] intents={list(intents)}")
+
         for intent in intents:
             intent_data = dict(intent) if isinstance(intent, Mapping) else {"value": intent}
             validation_errors = self._validate_intent(intent_data)
@@ -79,6 +81,10 @@ class ManagerGameApiAdapter:
                     "errors": [str(exc)],
                 }
             )
+
+        print(f"[manager_api_adapter] accepted_intents={accepted_intents}")
+        print(f"[manager_api_adapter] rejected_intents={rejected_intents}")
+        print(f"[manager_api_adapter] executed_actions={executed_actions}")
 
         events = [dict(event) for event in state.events]
         success = not errors and not any(event.get("type") in {"action_rejected", "action_failed"} for event in events)

@@ -125,20 +125,30 @@ def choose_turn_actions_by_captain(manager, resolved_context_report: dict[str, A
     if not isinstance(result, dict):
         return []
 
-    chosen = result.get("action")
-    if not isinstance(chosen, dict):
+    actions = result.get("actions")
+    if actions is None:
+        single = result.get("action")
+        actions = [single] if isinstance(single, dict) else None
+    if not isinstance(actions, list) or not actions:
+        print("[manager_api] captain finalization returned no actions")
         return []
 
-    # Validate action type against the ActionType enum before accepting
-    raw_type = chosen.get("type")
-    if not isinstance(raw_type, str):
-        return []
-    try:
-        ActionType[raw_type.strip().upper()]
-    except KeyError:
-        return []
+    for action in actions:
+        if not isinstance(action, dict):
+            print("[manager_api] captain finalization action not object")
+            return []
+        raw_type = action.get("type")
+        if not isinstance(raw_type, str):
+            print("[manager_api] captain finalization action missing type")
+            return []
+        try:
+            ActionType[raw_type.strip().upper()]
+        except KeyError:
+            print(f"[manager_api] captain finalization unsupported type={raw_type!r}")
+            return []
 
-    accepted = [{"role": "CAPTAIN", **chosen}]
+    accepted = [{"role": "CAPTAIN", **action} for action in actions]
+    print(f"[manager_api] accepted captain actions={accepted}")
 
     if manager._activation_until_actions_chosen:
         manager._activation_deadline_ms = None
@@ -168,7 +178,7 @@ def collect_actions(
     accepted = run_finalization_phase(manager, context_report)
 
     actions = run_send_phase(manager, accepted, manager.team)
-    #summarize_memory(manager, state)
+    summarize_memory(manager, state)
     return actions
 
 

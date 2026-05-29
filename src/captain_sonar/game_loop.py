@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Mapping, Optional, TypedDict
+from typing import Any, List, Mapping, Optional, TypedDict
 
 import pygame
 from agents.manager import TeamAgentManager
@@ -15,6 +15,7 @@ from .human_controller import HumanController
 from .sonar_response_modal import SonarResponseModal
 from .renderer import Renderer
 from .belief_tracker import BeliefTracker
+from .turn_evaluation import evaluate_turn
 
 from agents.manager.pipeline_helpers import manager_api as manager_api
 
@@ -60,6 +61,7 @@ class GameLoop:
         self.belief_red = BeliefTracker(state.map_data, own_team="RED")    # Red's belief about Blue
         self.sonar_modal = SonarResponseModal(state)
         self._last_turn_start_logged: tuple[int, str] | None = None
+        self._last_turn_evaluation: dict[str, Any] | None = None
         if self.logger:
             subs = {team: {"x": sub.x, "y": sub.y} for team, sub in state.subs.items()}
             self.logger.log_header({"map": map_name, "seed": seed, "teams": list(state.subs.keys()), "subs": subs})
@@ -310,12 +312,23 @@ class GameLoop:
             ),
             None,
         )
+        print(f"[game_loop] split_actions move={move_action} system={system_action}")
         return [move_action, system_action]
 
     def _apply_actions(self, actions: list[Action], *, advance_turn: bool) -> None:
+        print(f"[game_loop] apply_actions advance_turn={advance_turn} actions={actions}")
         self.state.apply_actions(order_actions(actions), increment_turn=advance_turn)
+        print(f"[game_loop] events={self.state.events}")
         self.belief_blue.update(self.state.events)
         self.belief_red.update(self.state.events)
+        if advance_turn:
+            self._last_turn_evaluation = evaluate_turn(
+                self.state,
+                self.belief_blue,
+                self.belief_red,
+                self._last_turn_evaluation,
+                log_path="logs/game_results.jsonl",
+            )
 
     def _is_valid_move_phase_queue(self, queue: List[Action]) -> bool:
         if len(queue) != 1:

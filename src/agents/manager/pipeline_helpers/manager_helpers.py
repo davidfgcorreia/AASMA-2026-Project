@@ -541,13 +541,15 @@ def _upsert_strategy_follow_section(strategy_text: str, updated_section: str) ->
     return "\n\n".join(parts).rstrip() + "\n"
 
 
-MEMORY_SUMMARY_THRESHOLD_CHARS = 2500
-MEMORY_SUMMARY_THRESHOLD_LINES = 80
+INDIVIDUAL_MEMORY_SUMMARY_THRESHOLD_CHARS = 3000
+INDIVIDUAL_MEMORY_SUMMARY_THRESHOLD_LINES = 100
+MASTER_MEMORY_SUMMARY_THRESHOLD_CHARS = INDIVIDUAL_MEMORY_SUMMARY_THRESHOLD_CHARS * 2
+MASTER_MEMORY_SUMMARY_THRESHOLD_LINES = INDIVIDUAL_MEMORY_SUMMARY_THRESHOLD_LINES * 2
 
 
-def _memory_needs_summary(content: str) -> bool:
+def _memory_needs_summary(content: str, *, char_limit: int, line_limit: int) -> bool:
     line_count = content.count("\n") + (1 if content else 0)
-    return len(content) >= MEMORY_SUMMARY_THRESHOLD_CHARS or line_count >= MEMORY_SUMMARY_THRESHOLD_LINES
+    return len(content) >= char_limit or line_count >= line_limit
 
 
 def _load_memory_summary_prompt() -> str:
@@ -626,7 +628,14 @@ def summarize_memory(manager, state: GameState | None = None) -> dict[str, Any]:
         ("ENGINEER_MEMORY", base_path / "engineer" / "memory.md"),
     ]
 
-    if not any(_memory_needs_summary(path.read_text(encoding="utf-8") if path.exists() else "") for _, path in memory_specs):
+    if not any(
+        _memory_needs_summary(
+            path.read_text(encoding="utf-8") if path.exists() else "",
+            char_limit=(MASTER_MEMORY_SUMMARY_THRESHOLD_CHARS if label == "MASTER_MEMORY" else INDIVIDUAL_MEMORY_SUMMARY_THRESHOLD_CHARS),
+            line_limit=(MASTER_MEMORY_SUMMARY_THRESHOLD_LINES if label == "MASTER_MEMORY" else INDIVIDUAL_MEMORY_SUMMARY_THRESHOLD_LINES),
+        )
+        for label, path in memory_specs
+    ):
         return {"summarized": False, "reason": "below_threshold"}
 
     prompt = _load_memory_summary_prompt()
@@ -639,7 +648,11 @@ def summarize_memory(manager, state: GameState | None = None) -> dict[str, Any]:
 
     for label, path in memory_specs:
         current_memory = path.read_text(encoding="utf-8") if path.exists() else ""
-        if not _memory_needs_summary(current_memory):
+        if not _memory_needs_summary(
+            current_memory,
+            char_limit=(MASTER_MEMORY_SUMMARY_THRESHOLD_CHARS if label == "MASTER_MEMORY" else INDIVIDUAL_MEMORY_SUMMARY_THRESHOLD_CHARS),
+            line_limit=(MASTER_MEMORY_SUMMARY_THRESHOLD_LINES if label == "MASTER_MEMORY" else INDIVIDUAL_MEMORY_SUMMARY_THRESHOLD_LINES),
+        ):
             continue
 
         result = call_agent_activity_with_context(
@@ -941,7 +954,6 @@ def run_captain_finalization_call(
     resolved_context_report: dict[str, Any],
 ) -> dict[str, Any]:
     
-
     
     base_path = Path(__file__).resolve().parents[2]
     prompt_path = base_path / "manager" / "prompts" / "5_finalization.md"
@@ -1013,13 +1025,28 @@ def run_captain_finalization_call(
     try:
         action = json.loads(cleaned)
     except json.JSONDecodeError:
+        print("[manager_helpers] finalization parse failed: invalid JSON")
         return {}
 
-    if not isinstance(action, dict) or not isinstance(action.get("type"), str):
+    if not isinstance(action, dict):
+        print("[manager_helpers] finalization parse failed: top-level not object")
         return {}
 
-    # Normalise: payload must always be a dict
-    if not isinstance(action.get("payload"), dict):
-        action["payload"] = {}
+    raw_actions = action.get("actions")
+    if raw_actions is None:
+        raw_actions = [action]
+    if not isinstance(raw_actions, list) or not raw_actions:
+        print("[manager_helpers] finalization parse failed: actions missing or empty")
+        return {}
 
-    return {"action": action}
+    normalized_actions: list[dict[str, Any]] = []
+    for raw_action in raw_actions:
+        if not isinstance(raw_action, dict) or not isinstance(raw_action.get("type"), str):
+            print("[manager_helpers] finalization parse failed: action missing type")
+            return {}
+        if not isinstance(raw_action.get("payload"), dict):
+            raw_action["payload"] = {}
+        normalized_actions.append(raw_action)
+
+    print(f"[manager_helpers] finalization parsed actions={normalized_actions}")
+    return {"actions": normalized_actions}
