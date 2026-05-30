@@ -4,6 +4,7 @@ import json
 from typing import Any, Iterable, Mapping, List
 from dataclasses import asdict
 
+from agents import manager
 from captain_sonar.actions import Action, ActionType
 from captain_sonar.config import GAUGE_MAX_DEFAULT
 from captain_sonar.api import get_team_view, snapshot_game_state
@@ -660,8 +661,44 @@ def collect_actions(
     setattr(manager, "_api_rotation_counter", rotation)
     context_report = run_turn_start_phase(manager, state)
     run_discussion_phase(manager, state, max_iterations=max_iterations, context_report=context_report)
-    accepted = run_finalization_phase(manager, context_report)
+    
+    approved = False
+    attempt = 0
+    max_attempts = 5
 
+    while attempt < max_attempts and not approved:
+        captain_action = _get_captain_action(manager, context_report)
+        if not captain_action: return []
+    
+        vote_yes = 0 
+        vote_no = 0
+        
+        for role in manager._active_roles:
+            if role.value == "CAPTAIN":
+                continue
+                
+            vote = _ask_vote(manager, role, captain_action, context_report)
+            
+            if vote:
+                propose_turn_action(manager, role, captain_action)
+                vote_yes += 1
+            else:
+                omit_turn_action(manager, role)
+                vote_no += 1
+        
+            approved = vote_yes > vote_no
+
+            if approved:
+                print(f"[voting] Approved! {vote_yes} yes, {vote_no} no")
+                break
+            else:
+                print(f"[voting] Rejected ({vote_yes}/{vote_no}), captain retrying...")
+                context_report["vote_feedback"] = f"Rejected. Need {vote_no + 1} yes votes."
+                attempt += 1
+        
+    if not approved: return []
+
+    accepted = run_finalization_phase(manager, context_report)
     actions = run_send_phase(manager, accepted, manager.team)
     summarize_memory(manager, state)
     return actions
@@ -729,57 +766,6 @@ def build_role_view(manager, role) -> dict[str, Any]:
 
 def get_state_snapshot(manager, state: GameState, turn_id: int | None = None) -> dict[str, Any]:
     return snapshot_game_state(state, turn_id=turn_id)
-
-def collect_actions_with_voting(manager, state: GameState, max_iterations: int = 1) -> list[Action]:
-    """Same as collect_actions but adds voting before finalization."""
-    
-    context_report = run_turn_start_phase(manager, state)
-    run_discussion_phase(manager, state, max_iterations, context_report)
-    
-    # === VOTING SYSTEM (apenas isso é novo) ===
-    approved = False
-    max_attempts = 3
-    
-    for attempt in range(max_attempts):
-        # Captain proposes
-        captain_action = _get_captain_action(manager, context_report)
-        if not captain_action:
-            return []
-        
-        # Ask team to vote using EXISTING propose/omit functions
-        yes_votes = 0
-        no_votes = 0
-        
-        for role in manager._active_roles:
-            if role.value == "CAPTAIN":
-                continue
-                
-            # Use existing function to ask role (you already have this pattern)
-            vote = _ask_vote(manager, role, captain_action, context_report)
-            
-            if vote:
-                propose_turn_action(manager, role, captain_action)  # Existing!
-                yes_votes += 1
-            else:
-                omit_turn_action(manager, role)  # Existing!
-                no_votes += 1
-        
-        approved = yes_votes > no_votes
-        
-        if approved:
-            print(f"[voting] Approved! {yes_votes} yes, {no_votes} no")
-            break
-        else:
-            print(f"[voting] Rejected ({yes_votes}/{no_votes}), captain retrying...")
-            context_report["vote_feedback"] = f"Rejected. Need {no_votes + 1} yes votes."
-    
-    if not approved:
-        return []
-    # === END VOTING ===
-    
-    accepted = run_finalization_phase(manager, context_report)
-    return run_send_phase(manager, accepted, manager.team)
-
 
 def _get_captain_action(manager, context_report):
     """Get single action from captain using existing function."""
