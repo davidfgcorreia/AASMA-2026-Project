@@ -14,21 +14,21 @@ from agents.manager.manager import TeamAgentManager
 from agents.captain.agent import ModelCaptainAgent
 from agents.first_mate.agent import ModelFirstMateAgent
 from agents.engineer.agent import ModelEngineerAgent
-from agents.radio_operator.agent import RadioOperatorAgent
+from agents.radio_operator.agent import ModelRadioOperatorAgent
 from captain_sonar.game_state import GameState, SubmarineState
 from captain_sonar.map_loader import load_map
 from captain_sonar.actions import order_actions
 
 load_env_file("src/agents/.env")
 
-NUM_TURNS = 1  # free-tier Gemini is 15 RPM, ~13 calls per turn
+NUM_TURNS = 3  # free-tier Gemini is 15 RPM, ~13 calls per turn
 
 # Build manager with all four model agents
 manager = TeamAgentManager("BLUE")
 manager.register_agent(ModelCaptainAgent("BLUE"), active=True)
 manager.register_agent(ModelFirstMateAgent("BLUE"), active=True)
 manager.register_agent(ModelEngineerAgent("BLUE"), active=True)
-manager.register_agent(RadioOperatorAgent("BLUE"), active=True)
+manager.register_agent(ModelRadioOperatorAgent("BLUE"), active=True)
 
 # Build game state directly
 map_data = load_map("assets/maps/default_map.json")

@@ -33,6 +33,56 @@ from .manager_helpers import update_memory
 
 
 
+def _run_radio_operator_phase(manager, team_view: dict[str, Any]) -> None:
+    """Run the Radio Operator's analysis and deliver its messages to team inboxes.
+
+    Called early in the turn start phase so that the Captain, First Mate, and
+    Engineer can see radio operator intel in their inboxes when they run their
+    own LLM analysis calls.
+    """
+    from agents.base import AgentRole
+    from ..views import build_role_view as _build_role_view
+    from ..messaging import read_inbox as _read_inbox
+    from ..models import AgentMessage
+
+    ro_role = AgentRole.RADIO_OPERATOR
+    ro_agent = manager._agents.get(ro_role)
+    if ro_agent is None or ro_role not in manager._active_roles:
+        return
+
+    ro_view = _build_role_view(
+        role=ro_role,
+        team_view=team_view,
+        turn_id=manager._turn_id,
+        active_roles=manager._active_roles,
+        inbox_reader=lambda r: _read_inbox(manager, r),
+    )
+
+    try:
+        result = ro_agent.propose_action(ro_view)
+    except Exception as exc:
+        print(f"[iteration_orchestrator] radio operator propose_action failed: {exc}")
+        return
+
+    for msg in (result.get("messages") or []):
+        recipient_str = str(msg.get("recipient") or "").upper()
+        recipient_role = next(
+            (r for r in AgentRole if r.value.upper() == recipient_str or r.name.upper() == recipient_str),
+            None,
+        )
+        if recipient_role is None or recipient_role not in manager._agents:
+            continue
+        message = AgentMessage(
+            sender=ro_role,
+            recipient=recipient_role,
+            text=msg.get("text", ""),
+            metadata=msg.get("metadata") or {},
+            turn_id=manager._turn_id,
+        )
+        manager._inbox[recipient_role].append(message)
+        manager._messages_this_turn.append(message)
+
+
 def run_turn_start_phase(manager, state: GameState) -> dict[str, Any]:
     from .manager_api import begin_turn as manager_begin_turn
 
@@ -43,9 +93,12 @@ def run_turn_start_phase(manager, state: GameState) -> dict[str, Any]:
         round_type=context_report["round_type"],
         source=context_report["source"],
     )
+    # Run radio operator first so its intel lands in the Captain's inbox
+    # before captain/first_mate/engineer run their turn-start analysis.
+    _run_radio_operator_phase(manager, context_report["team_view"])
     bundle = build_turn_start_context_bundle(manager, context_report)
     bundle["turn_start_results"] = run_turn_start_call(manager, bundle)
-    update_memory(manager, context_report,0)
+    update_memory(manager, context_report, 0)
     return context_report
 
 

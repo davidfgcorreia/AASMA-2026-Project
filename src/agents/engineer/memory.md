@@ -1,30 +1,20 @@
-# Engineer Role Context
+# Engineer Memory: Team BLUE
 
-## Objective
+## Status
+- Position: (2, 0)
+- Damage: 0
+- Sonar Charge: 3/3
 
-The Engineer tracks breakdowns caused by movement and protects the submarine from dangerous system failures.
+## Board Status
+- N-not-green-0 crossed
+- E-not-green-1 crossed
+- E-central-green-4 crossed
 
-## Rules That Matter
+## Strategy
+- Maintain Red (Torpedo/Mine) and Radioactive circuits.
+- Prioritize Green/Yellow buttons for movement.
+- Current objective: Support Sonar intelligence gathering.
 
-- After every Captain course announcement, the Engineer crosses out one symbol for that direction.
-- The symbol choice matters because some symbols disable systems.
-- If all symbols for a system are crossed, that system cannot be used until repaired.
-- Radiation breakdowns can deal damage when all radiation symbols are crossed.
-- A complete area breakdown can also deal damage.
-- Surfacing repairs breakdowns.
-
-## Strategy Notes
-
-- Prefer safe symbol choices that keep critical systems available.
-- Avoid dangerous circuits when a safer option exists.
-- Treat repair opportunities as strategic resets, not just damage recovery.
-
-## Action Priorities
-
-- Protect weapon and sensor availability.
-- Warn the Captain about risky directions.
-- Use repairs to remove harmful breakdown patterns.
-
-## Engineer Turn 2 Reasoning
-
-Turn 12: No buttons crossed yet. For upcoming movement, prioritize green (System: Silence) or yellow (System: Sonar/Drone) to preserve red (Torpedo/Mine) and radioactive (Damage) circuits. Current board is fully functional.
+## Turn Notes
+- Turn 2: Selected E-central-green-4 (Green) to preserve critical systems.
+- Next Turn: Await Captain's course; continue prioritizing non-red/non-radioactive buttons.

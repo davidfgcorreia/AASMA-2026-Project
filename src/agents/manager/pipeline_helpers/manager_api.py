@@ -652,6 +652,15 @@ def read_inbox(manager, role) -> list[dict[str, Any]]:
     return _read_inbox(manager, role)
 
 
+def collect_actions_with_voting(
+    manager,
+    state: GameState,
+    max_iterations: int = 1,
+) -> list[Action]:
+    """Alias for collect_actions (kept for backwards compatibility)."""
+    return collect_actions(manager, state, max_iterations=max_iterations)
+
+
 def collect_actions(
     manager,
     state: GameState,
@@ -668,35 +677,34 @@ def collect_actions(
 
     while attempt < max_attempts and not approved:
         captain_action = _get_captain_action(manager, context_report)
-        if not captain_action: return []
-    
-        vote_yes = 0 
+        if not captain_action:
+            return []
+
+        vote_yes = 0
         vote_no = 0
-        
+
         for role in manager._active_roles:
             if role.value == "CAPTAIN":
                 continue
-                
             vote = _ask_vote(manager, role, captain_action, context_report)
-            
             if vote:
                 propose_turn_action(manager, role, captain_action)
                 vote_yes += 1
             else:
                 omit_turn_action(manager, role)
                 vote_no += 1
-        
-            approved = vote_yes > vote_no
 
-            if approved:
-                print(f"[voting] Approved! {vote_yes} yes, {vote_no} no")
-                break
-            else:
-                print(f"[voting] Rejected ({vote_yes}/{vote_no}), captain retrying...")
-                context_report["vote_feedback"] = f"Rejected. Need {vote_no + 1} yes votes."
-                attempt += 1
-        
-    if not approved: return []
+        # Approval check is OUTSIDE the role loop — tallied after all votes
+        approved = vote_yes > vote_no
+        if approved:
+            print(f"[voting] Approved! {vote_yes} yes, {vote_no} no")
+        else:
+            print(f"[voting] Rejected ({vote_yes}/{vote_no}), captain retrying...")
+            context_report["vote_feedback"] = f"Rejected. Need {vote_no + 1} yes votes."
+            attempt += 1
+
+    if not approved:
+        return []
 
     accepted = run_finalization_phase(manager, context_report)
     actions = run_send_phase(manager, accepted, manager.team)
@@ -768,43 +776,75 @@ def get_state_snapshot(manager, state: GameState, turn_id: int | None = None) ->
     return snapshot_game_state(state, turn_id=turn_id)
 
 def _get_captain_action(manager, context_report):
-    """Get single action from captain using existing function."""
+    """Get a draft action from the captain for the voting round."""
     from .manager_helpers import run_captain_finalization_call
-    
-    possible = get_possible_actions(manager, None)
-    result = run_captain_finalization_call(manager, possible, context_report, 
-                                           extra_context=context_report.get("vote_feedback", ""))
-    
+
+    captain_role = next(
+        (r for r in manager._active_roles if r.value == "CAPTAIN"),
+        None,
+    )
+    possible: list[dict] = []
+    try:
+        possible = get_possible_actions(manager, captain_role)
+    except Exception:
+        pass
+
+    try:
+        result = run_captain_finalization_call(
+            manager,
+            possible,
+            context_report,
+            extra_context=context_report.get("vote_feedback", ""),
+        )
+    except Exception:
+        return None
+
     actions = result.get("actions") or ([result.get("action")] if result.get("action") else [])
     return actions[0] if actions else None
 
 
 def _ask_vote(manager, role, action, context):
+    import time
     from agents.common.functions import call_agent_activity_with_context
     from pathlib import Path
-    
-    # Ler o arquivo de prompt
-    prompt_path = Path(__file__).parent / "prompts" / "6_action_vote.md"
+
+    # Prompt lives in src/agents/manager/prompts/, one level above pipeline_helpers/
+    prompt_path = Path(__file__).parent.parent / "prompts" / "6_action_vote.md"
     prompt_template = prompt_path.read_text(encoding="utf-8")
-    
-    # Preencher o template
+
+    turn = (context.get("team_view") or {}).get("turn", 0)
     prompt = prompt_template.format(
         role=role.value,
-        action_type=action.get('type', 'UNKNOWN'),
-        action_payload=json.dumps(action.get('payload', {})),
-        turn=context.get('turn', 0)
+        action_type=action.get("type", "UNKNOWN"),
+        action_payload=json.dumps(action.get("payload", {})),
+        turn=turn,
     )
-    
-    result = call_agent_activity_with_context(
-        model="gemini-3.1-flash-lite",
-        prompt=prompt,
-        context="",
-        role=role.value,
-        api_key=_select_api_key(manager),
-        temperature=0.2,
-        max_output_tokens=5,
-        timeout_seconds=30,
-    )
-    
-    response = (getattr(result, "text", "") or "").strip().upper()
-    return "YES" in response
+
+    # Small delay to avoid rate-limit bursts when 3 votes fire back-to-back
+    time.sleep(2)
+
+    try:
+        result = call_agent_activity_with_context(
+            model="gemini-3.1-flash-lite",
+            prompt=prompt,
+            context="",
+            role=role.value,
+            api_key=_select_api_key(manager),
+            temperature=0.2,
+            max_output_tokens=10,
+            timeout_seconds=30,
+        )
+        response = (getattr(result, "text", "") or "").strip().upper()
+    except Exception as exc:
+        print(f"[voting] {role.value} vote call failed ({exc}), defaulting YES")
+        return True
+
+    if not response:
+        # Empty response = API rate-limited or transient error; default to YES
+        # so a single rate-limited call doesn't block the whole turn.
+        print(f"[voting] {role.value} returned empty response, defaulting YES")
+        return True
+
+    vote = "YES" in response
+    print(f"[voting] {role.value} voted {'YES' if vote else 'NO'} (raw: {response!r})")
+    return vote

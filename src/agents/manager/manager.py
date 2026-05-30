@@ -132,12 +132,12 @@ class TeamAgentManager:
         from agents.captain.agent import ModelCaptainAgent
         from agents.first_mate.agent import ModelFirstMateAgent
         from agents.engineer.agent import ModelEngineerAgent
-        from agents.radio_operator.agent import RadioOperatorAgent
+        from agents.radio_operator.agent import ModelRadioOperatorAgent
 
         self.register_agent(ModelCaptainAgent(self.team), active=True)
         self.register_agent(ModelFirstMateAgent(self.team), active=True)
         self.register_agent(ModelEngineerAgent(self.team), active=True)
-        self.register_agent(RadioOperatorAgent(self.team), active=True)
+        self.register_agent(ModelRadioOperatorAgent(self.team), active=True)
 
     def set_active_roles(self, roles: Iterable[AgentRole]) -> None:
         self._active_roles = derive_active_roles(
@@ -214,7 +214,7 @@ class TeamAgentManager:
         """Return a JSON-friendly snapshot of the provided game state."""
         return manager_api.get_state_snapshot(self, state, turn_id=turn_id)
 
-    def run_turn_cycle(self, state: GameState) -> dict[str, Any]:
+    def run_turn_cycle(self, state: GameState, max_iterations: int = 1) -> dict[str, Any]:
         """Run one turn through the direct manager action pipeline."""
-        actions = manager_api.collect_actions_with_voting(self, state)
+        actions = manager_api.collect_actions_with_voting(self, state, max_iterations=max_iterations)
         return {"turn_id": state.turn, "actions": actions}

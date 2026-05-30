@@ -96,3 +96,7 @@ Before finalizing the action:
 - [ ] No alternative better aligns with situation
 - [ ] Action reasoning is clear and defensible
 - [ ] Rationale includes both tactical and strategic elements
+
+## Strategy to follow:
+
+Turn 1: Move East to (2, 1). Strategy: Prioritize SONAR charge to establish initial enemy position. Coordinate with First Mate to ensure SONAR is ready. Maintain safety by avoiding map boundaries and islands.

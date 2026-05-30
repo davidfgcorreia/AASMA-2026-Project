@@ -109,6 +109,10 @@ Before finalizing the action:
 - [ ] Action reasoning is clear and defensible
 - [ ] Rationale includes both tactical and strategic elements
 
+## Strategy to follow:
+
+Turn 1: Move East to (2, 1). Strategy: Prioritize SONAR charge to establish initial enemy position. Coordinate with First Mate to ensure SONAR is ready. Maintain safety by avoiding map boundaries and islands.
+
 
 # Memory
 # Captain Role Context
@@ -122,6 +126,61 @@ The Captain controls movement, tactical aggression, and the overall turn plan. O
 ## Captain Turn 2 Reasoning
 
 Turn 12: Currently at (2, 4). Enemy moved W and used SONAR. No current system charge available. Must prioritize charging a system while maintaining mobility. Move E to gain distance from the center and open up new territory.
+
+## Captain Turn 0 Reasoning
+
+Turn 1: Move East to (2, 1). Strategy: Prioritize SONAR charge to establish initial enemy position. Engineer to prioritize green/yellow buttons on the E-circuit.
+
+
+## Captain Turn 0 Discussion Update 1
+
+Turn 0: Moving East to (2, 1). Initiating Discovery mode to establish early map presence. First Mate is charging SONAR.
+
+
+### Answer from ENGINEER (Turn 0)
+Q: Which direction (N, S, E, or W) allows us to maintain the most efficient path for keeping the SONAR system charged while navigating away from potential obstacles?
+A: Direction E is currently the most efficient; it allows us to avoid the RED (Torpedo/Mine) and RADIOACTIVE (Damage) circuits by selecting the remaining GREEN or YELLOW buttons, keeping our critical systems fully operational while we maintain our current heading.
+
+
+## Captain Turn 0 Reasoning
+
+The initial move East was blocked by an island at (2, 1); updated trajectory to move North to (1, 0) to clear the obstacle. Prioritizing SONAR charge for the next turn.
+
+
+## Captain Turn 1 Reasoning
+
+Turn 1: Currently at (1, 0). Move East to (2, 0) to continue exploring the map. Engineer to prioritize non-red/radioactive circuits. First Mate is charging SONAR to complete the charge.
+
+
+## Captain Turn 1 Discussion Update 1
+
+Turn 1: Currently at (1, 0). Move East to (2, 0) to continue map exploration. First Mate is charging SONAR to reach readiness. Strategy: Confirm enemy position via SONAR as soon as it is charged.
+
+
+### Answer from ENGINEER (Turn 1)
+Q: Which direction (N, S, E, or W) allows us to maintain the most efficient path for keeping the SONAR system charged while avoiding red or radioactive circuits for our next move?
+A: Moving East is the most efficient choice. The East circuit contains two green buttons (slot 1 and slot 4) and one yellow button (slot 3) that are currently uncrossed, allowing us to avoid all red and radioactive buttons while keeping the Sonar/Drone (yellow) and Silence (green) systems functional.
+
+
+## Captain Turn 1 Reasoning
+
+Moved to (2, 0) and completed SONAR charge; ready to localize enemy in the next turn.
+
+
+## Captain Turn 2 Reasoning
+
+Turn 2: Currently at (2, 0). Move East to (3, 0) to continue exploring. Engineer to use E-not-radioactive-0 (Radioactive) to keep Sonar charging. First Mate is charging SONAR to reach readiness. Strategy: Confirm enemy position via SONAR as soon as it is charged.
+
+
+## Captain Turn 2 Discussion Update 1
+
+Turn 2: Currently at (2, 0). Move East to (3, 0) to continue exploration. First Mate to finish charging SONAR. Engineer to select a non-radioactive/non-red button to maintain system integrity. Strategy: Execute SONAR as soon as it is fully charged to reveal enemy position.
+
+
+### Answer from ENGINEER (Turn 2)
+Q: Which direction allows us to maintain the most efficient path for keeping the SONAR system charged while avoiding red or radioactive circuits for our next move?
+A: East is our most efficient path. The East circuit contains two green buttons (slot 1 and slot 4), which allow us to maintain system integrity while avoiding red (weapon) and radioactive (damage) circuits. Moving East keeps our critical systems ready for the upcoming tactical phase.
+
 
 # Master Memory
 # Master Team Memory
@@ -177,14 +236,151 @@ The Captain has chosen East. Engineer has marked E-not-green-1 (Green) to minimi
 Turn 0: Starting position (1, 1). Team adopting Discovery mode to localize the enemy early. First Mate prioritizing Sonar to support Radio Operator intelligence.
 
 
+## Captain Turn 0
+
+- Agreed Move: East.
+- Charge Priority: SONAR.
+- Strategy: Establish early map control and enemy location. Keep the sub mobile and avoid initial obstacles.
+
+
+## Engineer Turn 0
+
+Turn 0: Team moved East to (2, 1). Engineer prioritized Green button to maintain system availability. First Mate confirms Sonar charge in progress.
+
+
+## First Mate Turn 0
+
+- Strategy: Initiate Discovery mode. 
+- Action: First Mate charging SONAR. 
+- Goal: Establish early enemy position via sensor intelligence.
+
+
+## Captain Turn 0 Discussion Update 1
+
+- Agreed Move: East.
+- Charge Priority: SONAR.
+- Strategy: Early map control and enemy localization.
+
+
+## Engineer Turn 0 Discussion Update 1
+
+- Move: East.
+- Engineer Action: E-not-green-1 (Green) crossed.
+- Status: Submarine at (2, 1), 0 damage.
+- Goal: Maintain system readiness while establishing position.
+
+
+## First Mate Turn 0 Discussion Update 1
+
+- Decision Log: First Mate confirmed SONAR charge initiation for Turn 0.
+
+## ##Captain Finalized Actions
+
+- team: BLUE
+- turn: 0
+- actions: [{"role": "CAPTAIN", "type": "MOVE", "payload": {"direction": "N", "charge": "sonar", "breakdown_choice": {"button_id": "N-not-green-0"}}}]
+
+
+## Captain Turn 1
+
+- Agreed Move: East.
+- Charge Priority: SONAR.
+- Strategy: Continue initial map exploration and confirm enemy location with the second SONAR charge.
+
+
+## Engineer Turn 1
+
+- Move: North.
+- Engineer Action: N-not-red-1 (Red) crossed to prioritize pathing; N-circuit remains robust.
+- Status: Submarine at (1, 0), 0 damage.
+- Goal: Maintain SONAR readiness and continue map discovery.
+
+
+## First Mate Turn 1
+
+- Strategy: Maintain Discovery mode.
+- Action: First Mate charging SONAR to reach readiness.
+- Goal: Secure enemy position data before committing to offensive maneuvers.
+
+
+## Captain Turn 1 Discussion Update 1
+
+- Decision: Move East to (2, 0) to maintain progress and map presence.
+- Charge Priority: SONAR.
+- Strategy: Continue Discovery mode; prioritize SONAR readiness for the upcoming turn.
+
+
+## Engineer Turn 1 Discussion Update 1
+
+- Decision Log: Engineer confirms E-not-green-1 (Green) for Turn 1 East movement to keep Red circuits clear.
+
+
+## First Mate Turn 1 Discussion Update 1
+
+- Strategy: Maintain Discovery mode.
+- Action: First Mate charging SONAR (2/3).
+- Goal: Secure enemy position data before committing to offensive maneuvers.
+
+## ##Captain Finalized Actions
+
+- team: BLUE
+- turn: 1
+- actions: [{"role": "CAPTAIN", "type": "MOVE", "payload": {"direction": "E", "charge": "sonar", "breakdown_choice": {"button_id": "E-not-green-1"}}}]
+
+
+## Captain Turn 2
+
+- Decision: Move East to (3, 0).
+- Charge Priority: SONAR.
+- Strategy: Continue Discovery mode; prioritize SONAR readiness for the upcoming turn to establish enemy position.
+- Team Coordination: Engineer to select E-not-radioactive-0 for movement. First Mate to charge SONAR.
+
+
+## Engineer Turn 2
+
+- Decision: Move East to (3, 0).
+- Charge Priority: SONAR (to reach 3/3 and reveal enemy).
+- Engineer Action: E-central-green-4 (Green) crossed.
+- Strategy: Maintain Discovery mode; SONAR readiness is the top priority.
+
+
+## First Mate Turn 2
+
+- Strategy: Continue Discovery mode.
+- Action: Complete SONAR charge to reveal enemy position.
+- Goal: Secure intelligence to guide subsequent torpedo or mine deployment.
+
+
+## Captain Turn 2 Discussion Update 1
+
+- Decision: Move East to (3, 0).
+- Charge Priority: SONAR.
+- Strategy: Continue Discovery mode; prioritize SONAR readiness for the upcoming turn to establish enemy position.
+- Team Coordination: Engineer to select E-not-radioactive-0 for movement. First Mate to charge SONAR.
+
+
+## Engineer Turn 2 Discussion Update 1
+
+- Move: East to (3, 0).
+- Engineer Action: E-central-green-4 (Green) crossed.
+- Status: Submarine at (3, 0), 0 damage. SONAR ready.
+- Goal: Reveal enemy position and transition to tactical/offensive mode.
+
+
+## First Mate Turn 2 Discussion Update 1
+
+- Decision Log: First Mate confirms SONAR charge for Turn 2 to complete readiness.
+- Strategy Update: Once SONAR is ready, the First Mate will notify the Captain to execute the scan.
+
+
 # Play Context
 # Play Context
 
 ## Trajectory Map
 ```
 map: 15x15
-...............
-.O#...#.....##.
+.-O............
+.-#...#.....##.
 ..#.....#...#..
 ........#......
 ...............
@@ -221,13 +417,13 @@ map: 15x15
 
 ## Engineer Board (Crossed)
 - W: (none)
-- N: (none)
+- N: N-not-green-0
 - S: (none)
-- E: (none)
+- E: E-not-green-1
 
 - team: BLUE
-- turn: 0
-- round_type: startup
+- turn: 2
+- round_type: normal
 - source: api
 - enemy_last_play: None
 
@@ -248,7 +444,7 @@ map: 15x15
         {
           "button_id": "E-not-green-1",
           "circuit_part": "not",
-          "crossed": false,
+          "crossed": true,
           "direction": "E",
           "function_type": "green",
           "slot_index": 1
@@ -290,7 +486,7 @@ map: 15x15
         {
           "button_id": "N-not-green-0",
           "circuit_part": "not",
-          "crossed": false,
+          "crossed": true,
           "direction": "N",
           "function_type": "green",
           "slot_index": 0
@@ -439,8 +635,12 @@ map: 15x15
     },
     "circuits_status": {},
     "crossed_by_direction": {
-      "E": [],
-      "N": [],
+      "E": [
+        "E-not-green-1"
+      ],
+      "N": [
+        "N-not-green-0"
+      ],
       "S": [],
       "W": []
     },
@@ -451,22 +651,22 @@ map: 15x15
     "mine": 0,
     "scenario": 0,
     "silence": 0,
-    "sonar": 0,
+    "sonar": 2,
     "torpedo": 0
   },
   "own_submarine": {
     "damage": 0,
-    "x": 1,
-    "y": 1
+    "x": 2,
+    "y": 0
   },
   "radio_operator": {
     "heard_moves": [],
     "most_likely_sector": 1
   },
-  "round_type": "startup",
+  "round_type": "normal",
   "source": "api",
   "team": "BLUE",
-  "turn": 0
+  "turn": 2
 }
 ```
 

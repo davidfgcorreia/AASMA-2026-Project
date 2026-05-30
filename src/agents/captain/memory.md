@@ -1,11 +1,16 @@
-# Captain Role Context
+# Team: BLUE
+# Memory Type: CAPTAIN_MEMORY
 
-## Objective
+## Current Status
+- Position: (3, 0)
+- Systems: SONAR fully charged.
 
-The Captain controls movement, tactical aggression, and the overall turn plan. On the game Capitan Sonar, the Captain is responsible for choosing the team's movement direction and which systems to activate each turn. The Captain must balance safety, tactical flexibility, information gathering, and coordinated team execution to lead the team to victory.
+## Strategic Priorities
+- Tactical: Execute SONAR immediately to localize the enemy.
+- Movement: Continue Eastward exploration while avoiding RED (weapon) and RADIOACTIVE (damage) circuits.
+- Engineer: Prioritize GREEN/YELLOW buttons to maintain system integrity.
 
-
-
-## Captain Turn 2 Reasoning
-
-Turn 12: Currently at (2, 4). Enemy moved W and used SONAR. No current system charge available. Must prioritize charging a system while maintaining mobility. Move E to gain distance from the center and open up new territory.
+## Turn History
+- Turn 0: Moved to (1, 0) after initial island blockage.
+- Turn 1: Moved to (2, 0); initiated SONAR charge.
+- Turn 2: Moved to (3, 0); SONAR charge complete.

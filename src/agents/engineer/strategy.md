@@ -33,3 +33,7 @@
 - The team has already taken damage and restoring system availability outweighs
   the cost of skipping movement.
 - All buttons in a high-priority circuit (red) are nearly exhausted.
+
+## Strategy to follow:
+
+Turn 1: Move East. Select E-not-green-1 to minimize system impact. Keep red (Torpedo/Mine) and green (Silence) circuits clear for future tactical needs.

@@ -1,5 +1,0 @@
-{
-  "CAPTAIN": "Maintain mobility while scanning for the enemy. Move East to explore the map center. If the enemy position remains unclear, prioritize SONAR to narrow down the search area. Coordinate with the First Mate to keep systems charged and ready for a potential engagement.",
-  "ENGINEER": "Prioritize selecting the safest available button for the East (E) movement. Avoid crossing radioactive or red buttons if possible. Since the board is currently clear, choose the 'green' button in the E slot to preserve critical systems. Monitor the board for any emerging damage patterns and advise the Captain on repair if necessary.",
-  "FIRST_MATE": "Follow Mode 2: Discovery. Prioritize charging SONAR first to assist the Captain in locating the enemy. Once SONAR is ready, switch to charging SILENCE or DRONE as a secondary contingency. Report system readiness to the Captain immediately upon completion."
-}

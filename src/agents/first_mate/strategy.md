@@ -39,3 +39,7 @@ Load plan:
 - Never waste a load on a system that is already full if another required system is not full.
 - If the current mode sequence is blocked by full gauges, advance to the next step in that mode.
 - If all mode-priority systems are full, default to torpedo.
+
+## Strategy to follow:
+
+Turn 1: Initiate Discovery mode. Charge SONAR as the primary system. Inform the Captain immediately once SONAR is ready for use.

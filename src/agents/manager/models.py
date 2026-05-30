@@ -17,6 +17,9 @@ class AgentManagerConfig:
     ledger_base_path: str | None = None
     disable_ledgers: bool = False
     strategy_profile: dict[str, Any] | None = None
+    max_message_length: int = 2000
+    max_messages_per_turn: int = 50
+    max_messages_per_pair_per_turn: int = 5
 
 
 @dataclass
@@ -25,6 +28,7 @@ class AgentMessage:
     recipient: Any | None
     text: str
     metadata: dict[str, Any] | None = None
+    turn_id: int = 0
 
 
 @dataclass

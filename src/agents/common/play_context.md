@@ -3,8 +3,8 @@
 ## Trajectory Map
 ```
 map: 15x15
-...............
-.O#...#.....##.
+.-O............
+.-#...#.....##.
 ..#.....#...#..
 ........#......
 ...............
@@ -41,13 +41,13 @@ map: 15x15
 
 ## Engineer Board (Crossed)
 - W: (none)
-- N: (none)
+- N: N-not-green-0
 - S: (none)
-- E: (none)
+- E: E-not-green-1
 
 - team: BLUE
-- turn: 0
-- round_type: startup
+- turn: 2
+- round_type: normal
 - source: api
 - enemy_last_play: None
 
@@ -68,7 +68,7 @@ map: 15x15
         {
           "button_id": "E-not-green-1",
           "circuit_part": "not",
-          "crossed": false,
+          "crossed": true,
           "direction": "E",
           "function_type": "green",
           "slot_index": 1
@@ -110,7 +110,7 @@ map: 15x15
         {
           "button_id": "N-not-green-0",
           "circuit_part": "not",
-          "crossed": false,
+          "crossed": true,
           "direction": "N",
           "function_type": "green",
           "slot_index": 0
@@ -259,8 +259,12 @@ map: 15x15
     },
     "circuits_status": {},
     "crossed_by_direction": {
-      "E": [],
-      "N": [],
+      "E": [
+        "E-not-green-1"
+      ],
+      "N": [
+        "N-not-green-0"
+      ],
       "S": [],
       "W": []
     },
@@ -271,21 +275,21 @@ map: 15x15
     "mine": 0,
     "scenario": 0,
     "silence": 0,
-    "sonar": 0,
+    "sonar": 2,
     "torpedo": 0
   },
   "own_submarine": {
     "damage": 0,
-    "x": 1,
-    "y": 1
+    "x": 2,
+    "y": 0
   },
   "radio_operator": {
     "heard_moves": [],
     "most_likely_sector": 1
   },
-  "round_type": "startup",
+  "round_type": "normal",
   "source": "api",
   "team": "BLUE",
-  "turn": 0
+  "turn": 2
 }
 ```
