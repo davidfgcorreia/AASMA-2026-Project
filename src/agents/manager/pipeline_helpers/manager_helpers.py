@@ -990,6 +990,7 @@ def run_captain_finalization_call(
     manager,
     possible_actions: list[dict[str, Any]],
     resolved_context_report: dict[str, Any],
+    extra_context: str | None = None,
 ) -> dict[str, Any]:
     
     
@@ -1024,6 +1025,10 @@ def run_captain_finalization_call(
         "```",
     ])
     full_context = base_context
+    if extra_context:
+        extra_block = extra_context.strip()
+        if extra_block:
+            full_context = "\n".join([full_context.rstrip(), "", extra_block, ""])
 
     print(f" [hellper] full_context for captain finalization call:\n{full_context}")
 

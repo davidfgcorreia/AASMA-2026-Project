@@ -414,7 +414,7 @@ def _system_allowed(team_view: dict[str, Any], system: str) -> bool:
 
 def _suggest_charge_system(team_view: dict[str, Any]) -> str:
     ready = team_view.get("system_utilization", {}).get("ready", {})
-    for candidate in ("torpedo", "mine", "drone", "silence"):
+    for candidate in ("torpedo", "mine", "drone", "sonar", "silence"):
         if not ready.get(candidate, False):
             return candidate
     return NONE_VALUE
@@ -422,7 +422,11 @@ def _suggest_charge_system(team_view: dict[str, Any]) -> str:
 
 def _chargeable_systems(team_view: dict[str, Any]) -> list[str]:
     ready = team_view.get("system_utilization", {}).get("ready", {})
-    options = [candidate for candidate in ("torpedo", "mine", "drone", "silence") if not ready.get(candidate, False)]
+    options = [
+        candidate
+        for candidate in ("torpedo", "mine", "drone", "sonar", "silence")
+        if not ready.get(candidate, False)
+    ]
     return options or [NONE_VALUE]
 
 

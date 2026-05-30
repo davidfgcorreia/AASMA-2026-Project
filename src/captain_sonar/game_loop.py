@@ -252,6 +252,7 @@ class GameLoop:
             ui_state = active_controller.ui_state() if active_controller else {}
             ui_state["active_team"] = active_team
             ui_state["turn_phase"] = phase_by_team.get(active_team, "move")
+            ui_state["team"] = active_team
             
             # Use the correct belief tracker for the active team
             active_belief = self.belief_blue if active_team == "BLUE" else self.belief_red
