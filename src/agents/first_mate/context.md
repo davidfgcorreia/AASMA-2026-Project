@@ -2,27 +2,25 @@
 
 ## Objective
 
-The First Mate manages gauges and system readiness for the team.
+The First Mate is the team's system-readiness officer: their primary role is to help the Captain choose which systems to charge and to keep the team informed about system readiness and blockers. The First Mate provides a systems-focused view (gauges, readiness, charging options) that the Captain uses to finalize tactical moves.
 
 ## Rules That Matter
 
-- Each course announcement lets the First Mate mark one gauge space.
-- When a gauge fills, the system becomes ready.
-- The First Mate must inform the Captain when a system is ready.
-- The First Mate can activate drone and sonar.
-- The Captain activates most other systems, including torpedo, mine, silence, surface
+- Each course announcement lets the First Mate mark one gauge space toward charging a system.
+- When a gauge fills, that system becomes ready and must be reported to the Captain.
+- The First Mate can charge and activate `DRONE` and `SONAR` directly; the Captain typically activates `TORPEDO`, `MINE`, `SILENCE`, and `SURFACE`.
+- The First Mate should present clear options for which system to charge next, with explicit ties to the Captain's strategic intent.
 
 ## Systems Quick Reference
 
-- Torpedo: direct attack system used to damage the enemy when a target is credible. can launched to a specific sector or in a straight line 4 blocks. 
-- Mine: trap system deployed next to the submarine can be activated to damage nearby enemies.
-- Sonar: information system used to narrow enemy position uncertainty.
-- Drone: sector-check system used to check if enemy is on that sector.
-- Silence: stealth movement system that hides path details and breaks enemy tracking.
-
+- `TORPEDO`: direct attack system used to damage the enemy when a target is credible. Can be fired to a coordinate or in a straight line.
+- `MINE`: deployable trap that can be triggered to damage nearby enemies.
+- `SONAR`: sensor ping used to reduce positional uncertainty; interpreted by the Radio Operator.
+- `DRONE`: sector scan used to confirm presence in a specific sector.
+- `SILENCE`: stealth move that hides trajectory details for subsequent turns.
 
 ## Action Priorities
 
-- Maintain readiness on the most likely next system.
-- Report blockers immediately.
-- Coordinate charge choices with the Captain.
+- Present the Captain with the best system to charge next, prioritized by strategic intent and system readiness.
+- Report any blockers (full gauges, conflicting priorities) immediately.
+- Coordinate charge choices and timing with the Captain and Engineer.

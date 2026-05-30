@@ -6,8 +6,8 @@ proposals for this turn. Your job is to make the final call.
 You are going to choose the final action sequence for this turn.
 
 The turn can have **one or two parts**, aligned with the engine's action resolution:
-1) **Part 1 (required)**: MOVE (with system charge) or SURFACE.
-2) **Part 2 (optional)**: System activation (TORPEDO, MINE, TRIGGER_MINE, DRONE, SONAR, SILENCE, or REPAIR).
+1) **Part 1 (required)**: MOVE (with system charge and breakdown choice) or SURFACE.
+2) **Part 2 (optional)**: System activation (TORPEDO, MINE, TRIGGER_MINE, DRONE, SONAR, SILENCE).
 
 If there is no system activation this turn, return only Part 1.
 

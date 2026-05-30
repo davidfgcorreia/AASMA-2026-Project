@@ -1,45 +1,25 @@
 # First Mate Strategy
 
-The first mate is the system-readiness specialist for the team.
+The First Mate's strategy focuses on keeping the team supplied with the systems the Captain needs to execute strategy. Prioritize charging systems that directly support the Captain's current intent (stealth, information-gathering, or offense).
 
-Core rule:
-- Choose the next system to charge, not the submarine movement direction.
+## Core Rule
 
-## Mode 1: Attack
+- Choose the next system to charge based on the Captain's declared intent and current system readiness — not movement direction.
 
-Goal:
-- Keep pressure with attack-ready systems.
+## Intent-Driven Load Priorities
 
-Load plan:
-- Turn 1: load torpedo.
-- Turn 2: load silence.
-- After turn 2: keep loading the attack system that is not full yet (torpedo first, then mine if needed).
+- **Offensive**: prioritize `TORPEDO` (then `MINE`) to prepare for attack windows.
+- **Information / Recon**: prioritize `SONAR` and `DRONE` to reduce uncertainty before spending weapons.
+- **Stealth / Evasion**: prioritize `SILENCE` to preserve concealment and avoid revealing routes.
 
-## Mode 2: Discovery
+## Practical Load Rules
 
-Goal:
-- Improve enemy localization before committing heavy weapons.
+- Never waste a load on a system that's already full when another required system is not full.
+- If the chosen mode's next system is blocked (gauge full), advance to the next recommended system for that mode and explain the trade-off.
+- If multiple systems are equally suitable, prefer the one that preserves critical capability for the next 1–2 turns (e.g., keep one sensor ready while charging one weapon).
 
-Load plan:
-- Turn 1: load sonar.
-- Turn 2: load silence.
-- After turn 2: keep sonar ready, then rotate to drone when sonar is already full.
+## Communication & Coordination
 
-## Mode 3: Stealth
-
-Goal:
-- Maximize concealment while keeping one backup option available.
-
-Load plan:
-- First two loads: silence, silence.
-- Third load: one non-silence system (prefer sonar; if sonar is full, use torpedo or mine).
-
-## Shared Constraints
-
-- Never waste a load on a system that is already full if another required system is not full.
-- If the current mode sequence is blocked by full gauges, advance to the next step in that mode.
-- If all mode-priority systems are full, default to torpedo.
-
-## Strategy to follow:
-
-Turn 1: Initiate Discovery mode. Charge SONAR as the primary system. Inform the Captain immediately once SONAR is ready for use.
+- Always report system-ready events to the Captain immediately.
+- If a charging decision might conflict with Engineer constraints (blocked circuits), ask the Engineer before committing.
+- Provide a short recommendation plus one fallback option for the Captain to choose from.

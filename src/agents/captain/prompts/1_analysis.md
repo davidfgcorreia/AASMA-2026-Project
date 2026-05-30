@@ -1,44 +1,31 @@
 # Phase 1: State Analysis and Strategic Reasoning
 
-You are the Captain analyzing the current game state and determining the optimal tactical direction and system to activate this turn.
+You are the Captain performing the first analysis at the start of our turn, immediately after the enemy has played.
 
-## Task
-Review the current game state, your memory, context, and the team strategy, then provide:
-1. **Direction**: The next movement direction (N/S/E/W) and justification
-2. **System**: The system to activate (or MOVE only) and justification
-3. **Reasoning**: Brief explanation of why this choice preserves tactical options and follows the strategy
+## Task 
+Carefully review the current game state, your role memory, the shared master memory, and the play context. Produce the following reasoning in order:
+1. **Enemy intent** — Briefly reason about what the enemy's last play was trying to achieve and what their likely finality or tactical goal is.
+2. **Damage check** — State if we took damage or sustained breakdowns and the tactical implications of those damages.
+3. **Map / Trajectory analysis** — Consult the Trajectory Map in the play context and list the legal directions available (e.g., N/S/E/W) and any hazards or constraints that make directions illegal or risky.
+4. **Recommended next step (narrative)** — In plain narrative (not a structured action), say what we should do next, for example: “We should follow direction E because ...” or “We should do X because ...”. Do NOT output a structured action object here.
+5. **System load rationale** — Recommend a system to load and explain why loading that system is preferable now.
+6. **Memory instructions** — Save the full, detailed reasoning above into the Captain role memory. Also produce a concise summary suitable for the shared master memory.
 
-## Input Sources
-- Current game state (position, damage, routes, possible actions)
-- `own_routes` — all cells already visited this game; you CANNOT move to any of these
-- `inbox` — messages from teammates this turn:
-  - **Engineer**: per-direction button recommendations (use for `engineer_button_id`)
-  - **First Mate**: which system to charge next (use for `load_system`)
-  - **Radio Operator**: enemy position estimate and confidence (use for targeting decisions)
-- Your memory of previous moves and enemy behavior
-- Strategy guide (tactical priorities and constraints)
-
-## Constraints
-- Only suggest directions listed in `possible_actions` (legal moves only)
-- Never choose a direction that leads to a cell already in `own_routes`
-- Movement must be one cardinal direction at a time
-- Cannot activate two systems in a row without movement
-- Must respect the strategy guide priorities
-- Account for system cooldowns and current damage state
+Focus on preserving tactical options, safety (avoiding illegal moves), and enabling the Engineer to act on clearly stated button choices if relevant.
 
 ## Output Format
-Return your response in this exact order and do not add any extra text:
+Return only the two sections below, in this exact order, with no extra text before or after:
 
 ```
 ## Memory Update
-[Write the text that should be appended to the Captain memory file for this turn.]
+[Full reasoning text to append to the Captain role memory for this turn. Include all numbered steps (1–5) and any useful detail the Engineer needs to understand the recommendation.]
 
 ## Master Memory Update
-[Write the text that should be appended to the shared master memory for this turn.]
+[A short, 1–3 sentence summary of the decision and recommendation suitable for the shared master memory.]
 ```
 
 ## Content Rules
-- Put the Captain-specific memory update first.
-- Put the shared master memory update second.
-- Keep both sections concise and directly usable.
-- Do not include direction analysis, system selection, or any other sections.
+- Put the Captain role `Memory Update` first (this should be the full, detailed reasoning).
+- Put the shared `Master Memory Update` second (a concise summary).
+- Do not include structured action objects in these sections; use narrative recommendations only.
+- Be explicit about why a direction or system is recommended and mention key hazards or constraints that influenced the choice.

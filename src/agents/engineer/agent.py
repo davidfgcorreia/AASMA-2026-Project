@@ -116,7 +116,7 @@ class ModelEngineerAgent(EngineerAgent):
     Phase 1 — board analysis: the model reviews all available buttons per
                direction, ranks them by safety, and flags warnings (prose).
     Phase 2 — selection: the model outputs per-direction recommendations
-               and a repair flag as JSON.
+               and a surface recommendation flag as JSON.
 
     The proposal includes a message to the Captain with all recommendations
     so the Captain can pick the correct button for whichever direction it chooses.
@@ -183,16 +183,17 @@ class ModelEngineerAgent(EngineerAgent):
                     if isinstance(d, str) and isinstance(bid, str):
                         recommendations[d.upper()] = bid
 
-            repair_recommended = bool(parsed.get("repair_recommended", False))
+            # accept either legacy `repair_recommended` or newer `surface_recommended`
+            repair_recommended = bool(parsed.get("repair_recommended", False) or parsed.get("surface_recommended", False))
 
         except Exception:
             pass  # fall through to heuristic
 
-        # If REPAIR is recommended, propose that
+        # If SURFACE is recommended, propose surfacing
         if repair_recommended:
             return {
                 "role": self.role.value,
-                "type": "REPAIR",
+                "type": "SURFACE",
                 "payload": {},
                 "reasoning": analysis,
             }

@@ -1,25 +1,25 @@
 # Phase 1: Strategy Lock
 
-Review the First Mate context and strategy before selecting a system.
+Review the First Mate context and the Captain's stated intent before selecting a system to charge. Your role is to propose system loads that support the Captain's plan.
 
 Task:
-- Confirm the current charge state.
-- Keep the strategic priorities in view.
-- Identify whether torpedo, sonar, silence, mine, or drone should be favored next.
+- Confirm the current charge state and gauge availability.
+- Use the Captain's stated intent to prioritize which systems should be charged next.
+- Produce one recommended system to charge and one fallback, with brief rationale.
 
 Output format:
 Return your response in this exact order and do not add any extra text:
 
 ```
 ## Memory Update
-[Write the text that should be appended to the First Mate memory file for this turn.]
+[Detailed text to append to the First Mate memory: current gauge state, recommended system to charge, fallback option, and short rationale.]
 
 ## Master Memory Update
-[Write the text that should be appended to the shared master memory for this turn.]
+[A short, 1–3 sentence summary of the recommended system and why it supports the Captain's intent.]
 ```
 
 Content rules:
-- Put the First Mate-specific memory update first.
-- Put the shared master memory update second.
-- Keep both sections short and directly actionable.
-- Do not include system selection text or any other sections.
+- Put the First Mate-specific `Memory Update` first.
+- Put the shared `Master Memory Update` second.
+- Keep both sections concise and actionable.
+- Do not include the final system activation — only the charging recommendation.

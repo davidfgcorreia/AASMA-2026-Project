@@ -1,39 +1,34 @@
 # Engineer Strategy Guide
 
-## Button Safety Priority (safest to most dangerous)
+This strategy guide aligns with the strategic rules and recommendations in the Engineer role context (`src/agents/engineer/context.md`). It avoids hard-coded board layouts (those are provided in the play context) and instead gives intent-driven decision rules and priorities.
 
-1. **green** — blocks silence when all green crossed. Silence is low-priority at game start.
-2. **yellow** — blocks sonar and drone when all yellow crossed. Medium priority.
-3. **red** — blocks torpedo and mine when all red crossed. High priority — avoid crossing.
-4. **radioactive** — causes direct damage when all radioactive crossed. Avoid at all costs.
+## Baseline Button Safety (reference only)
 
-## Button Layout Reference
+Use this baseline ordering as a starting point, but adapt based on mission intent and circuit state:
+1. **green** — lowest disruption to systems.
+2. **yellow** — impacts sensors when exhausted.
+3. **red** — impacts weapons when exhausted; higher-risk for offensive plans.
+4. **radioactive** — can cause direct damage; avoid whenever possible.
 
-| Direction | slot 0 | slot 1 | slot 2 | slot 3 | slot 4 | slot 5 |
-|-----------|--------|--------|--------|--------|--------|--------|
-| W | green | radioactive | radioactive | red | green | yellow |
-| N | green | red | radioactive | red | yellow | red |
-| S | red | radioactive | yellow | yellow | green | red |
-| E | radioactive | green | radioactive | yellow | green | red |
+## Strategy Principles
+
+- Choose buttons based on the strategy objective (stealth, offense, or intelligence), not a universal preference.
+- Concentrate crossings within the same circuit segment to enable faster clearing and recovery.
+- Preserve critical systems required by the near-term plan: if a torpedo is planned, avoid crossings that risk disabling red circuits; if sonar is needed, avoid crossings that threaten yellow circuits.
+- Never cross a `radioactive` button if any non-radioactive button is available, unless survival requires it.
 
 ## Decision Rules
 
-- Always prefer the safest uncrossed button for the active direction.
-- Never cross a radioactive button if any non-radioactive button remains uncrossed.
-- Avoid crossing red buttons when torpedo or mine is the current charge target.
-- If multiple buttons share the same safety tier, prefer the one whose function_type
-  already has more crossed siblings — spreading damage across circuits is safer than
-  concentrating it on one.
-- If the only remaining buttons for a direction are red or radioactive, recommend REPAIR.
+- Prefer the safest uncrossed button relevant to the current mission intent (refer to the Captain/First Mate recommendations for intent).
+- If multiple uncrossed buttons share the same safety tier, prefer the one that helps concentrate crossings on the same circuit segment.
+- If the only available buttons for a required direction are red or radioactive, (or `SURFACE`) and notify the Captain immediately with the blocking `button_id`s and circuits.
+- When in doubt, ask targeted questions to `CAPTAIN` or `FIRST_MATE` about intent before committing to a high-risk crossing.
 
-## When to Recommend REPAIR
+## When to Recommend SURFACE
 
-- A radioactive button has been crossed and another radioactive is the only remaining
-  option for an upcoming direction.
-- The team has already taken damage and restoring system availability outweighs
-  the cost of skipping movement.
-- All buttons in a high-priority circuit (red) are nearly exhausted.
+- A radioactive button has been crossed and the next available option in that direction is radioactive.
+- The team has taken damage and restoring system availability outweighs movement.
+- Multiple elements of a high-priority circuit are nearly exhausted and continued crossings will disable a critical system.
 
-## Strategy to follow:
 
-Turn 1: Move East. Select E-not-green-1 to minimize system impact. Keep red (Torpedo/Mine) and green (Silence) circuits clear for future tactical needs.
+

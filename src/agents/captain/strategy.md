@@ -84,7 +84,6 @@ For each turn decision:
 | TRIGGER_MINE | Enemy near mine, tactical advantage | Desperation only | Coordinate timing |
 | SONAR | Resolve high-confidence uncertainty | After clear intel exists | Radio operator input |
 | DRONE | Sector confirmation, search grid | Random searching | Plan coverage |
-| REPAIR | Critical systems damaged | Minor damage, healthy systems | Consult engineer |
 | SURFACE | Map blocked, reset needed | Rarely; costs tactical position | Team decision |
 
 ## End-of-Turn Checklist
