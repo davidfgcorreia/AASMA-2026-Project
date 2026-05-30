@@ -145,6 +145,8 @@ def evaluate_turn(
             "deltas": deltas,
         }
 
+    _apply_zero_sum_scores(team_scores, previous)
+
     leader = _determine_leader(team_scores)
 
     result = {
@@ -158,6 +160,24 @@ def evaluate_turn(
 
     _write_log_entry(log_path, result)
     return result
+
+
+def _apply_zero_sum_scores(team_scores: dict[str, dict[str, Any]], previous: dict[str, Any] | None) -> None:
+    if "RED" not in team_scores or "BLUE" not in team_scores:
+        return
+    red_score = float(team_scores["RED"].get("score", 0.0))
+    blue_score = float(team_scores["BLUE"].get("score", 0.0))
+    advantage = red_score - blue_score
+
+    team_scores["RED"]["score"] = advantage
+    team_scores["BLUE"]["score"] = -advantage
+
+    previous_teams = (previous or {}).get("teams", {})
+    red_prev = previous_teams.get("RED", {}).get("score")
+    blue_prev = previous_teams.get("BLUE", {}).get("score")
+
+    team_scores["RED"]["deltas"]["score"] = _delta(advantage, red_prev)
+    team_scores["BLUE"]["deltas"]["score"] = _delta(-advantage, blue_prev)
 
 
 def _enemy_of(teams: list[str], team: str) -> str | None:
