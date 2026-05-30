@@ -113,11 +113,12 @@ coverage.xml
 
 image.png
 
-src/agents/captain/memory.md
+# Project runtime/generated artifacts
+test.txt
+src/agents/**/memory.md
 src/agents/common/master_memory.md
-src/agents/engineer/memory.md
-src/agents/first_mate/memory.md
-src/agents/manager/outputs
-src/agents/manager/contexts
+src/agents/manager/outputs/
+src/agents/manager/contexts/
+logs/
 
 .claude/
