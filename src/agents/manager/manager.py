@@ -216,5 +216,5 @@ class TeamAgentManager:
 
     def run_turn_cycle(self, state: GameState) -> dict[str, Any]:
         """Run one turn through the direct manager action pipeline."""
-        actions = manager_api.collect_actions(self, state)
+        actions = manager_api.collect_actions_with_voting(self, state)
         return {"turn_id": state.turn, "actions": actions}
