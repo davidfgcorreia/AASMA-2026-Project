@@ -572,7 +572,7 @@ def _upsert_strategy_follow_section(strategy_text: str, updated_section: str) ->
     return "\n\n".join(parts).rstrip() + "\n"
 
 
-INDIVIDUAL_MEMORY_SUMMARY_THRESHOLD_CHARS = 3000
+INDIVIDUAL_MEMORY_SUMMARY_THRESHOLD_CHARS = 2000
 INDIVIDUAL_MEMORY_SUMMARY_THRESHOLD_LINES = 100
 MASTER_MEMORY_SUMMARY_THRESHOLD_CHARS = INDIVIDUAL_MEMORY_SUMMARY_THRESHOLD_CHARS * 2
 MASTER_MEMORY_SUMMARY_THRESHOLD_LINES = INDIVIDUAL_MEMORY_SUMMARY_THRESHOLD_LINES * 2
@@ -698,7 +698,7 @@ def summarize_memory(manager, state: GameState | None = None) -> dict[str, Any]:
             role="MANAGER",
             api_key=_select_api_key(manager),
             temperature=0.4,
-            max_output_tokens=5000,
+            max_output_tokens=1500,
             timeout_seconds=60.0,
         )
 
