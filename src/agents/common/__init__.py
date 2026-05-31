@@ -1,5 +1,4 @@
 from .functions import (
-    broadcast_team_message,
     build_activity_context,
     build_activity_prompt,
     build_team_activity_payload,
@@ -9,7 +8,6 @@ from .functions import (
     read_master_memory,
     read_turn_actions,
     read_role_memory,
-    send_inter_agent_message,
     update_master_memory,
     update_turn_actions,
     write_master_memory,
@@ -31,8 +29,6 @@ __all__ = [
     "build_activity_prompt",
     "call_agent_activity",
     "action_signature",
-    "send_inter_agent_message",
-    "broadcast_team_message",
     "build_team_activity_payload",
     "read_turn_actions",
     "write_turn_actions",

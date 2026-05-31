@@ -98,6 +98,14 @@ class GameLoop:
             active_phase = phase_by_team.get(active_team, "move")
             self._log_turn_start(active_team, active_phase)
 
+
+            # zona do sonar integrar com os agents para pedir respostar e analizar resposta 
+
+
+            # nao esquecer que o pedido de resposate é dado depois de um ativar sonar  e que a reposta é mostrada a quem pedio o sonar no inicio da sua ronda seguinte
+
+            # render das respostas na faze seguinte 
+
             if self.sonar_modal.active:
                 waiting_team = self.sonar_modal.waiting_team
                 if waiting_team is None:
@@ -135,6 +143,8 @@ class GameLoop:
                 pygame.display.flip()
                 self.clock.tick(FPS)
                 continue
+
+
 
             if self._is_agent_team(active_team) and not self.state.game_over:
                 acting_team = active_team

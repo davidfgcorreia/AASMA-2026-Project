@@ -259,27 +259,8 @@ def call_agent_activity_with_context(
     )
 
 
-def send_inter_agent_message(
-    manager: TeamAgentManager,
-    sender: AgentRole,
-    recipient: AgentRole | None,
-    text: str,
-    metadata: dict[str, Any] | None = None,
-) -> bool:
-    """Route a message through the manager with a single helper call."""
-    from agents.manager.pipeline_helpers.manager_api import send_message as manager_send_message
-    return manager_send_message(manager, sender, recipient, text, metadata)
 
 
-def broadcast_team_message(
-    manager: TeamAgentManager,
-    sender: AgentRole,
-    text: str,
-    metadata: dict[str, Any] | None = None,
-) -> bool:
-    """Broadcast a message to the active team roles."""
-    from agents.manager.pipeline_helpers.manager_api import broadcast as manager_broadcast
-    return manager_broadcast(manager, sender, text, metadata)
 
 
 def build_team_activity_payload(
@@ -298,7 +279,7 @@ def build_team_activity_payload(
 
 
 def _stringify(value: Any) -> str:
-    if is_dataclass(value):
+    if is_dataclass(value) and not isinstance(value, type):
         return _stringify(asdict(value))
     if isinstance(value, dict):
         return "{" + ", ".join(f"{key}: {_stringify(item)}" for key, item in value.items()) + "}"

@@ -117,8 +117,12 @@ def call_gemini(
         raise RuntimeError(f"Gemini request failed with HTTP {error.code}: {details}") from error
     except urllib.error.URLError as error:
         raise RuntimeError(f"Gemini request failed: {error.reason}") from error
+    
+    response = GeminiResponse(text=_extract_text(raw), raw=raw, model=model)
 
-    return GeminiResponse(text=_extract_text(raw), raw=raw, model=model)
+    print(f"Gemini call - output text: {response.text}")
+
+    return response
 
 
 def _resolve_api_key(api_key: str | None) -> str:

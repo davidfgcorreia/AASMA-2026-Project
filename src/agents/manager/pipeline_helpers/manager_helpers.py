@@ -1083,3 +1083,24 @@ def run_captain_finalization_call(
 
     print(f"[manager_helpers] finalization parsed actions={normalized_actions}")
     return {"actions": normalized_actions}
+
+
+
+
+
+
+
+def _response_to_sonar(manager,context_report: dict[str, Any]) -> list[dict[str, Any]]:
+    #roda resposta do sonar, retorna resultado da resposta para ser analisada
+    #uma verdade uma mentira sobre a nossa possicao
+    #verificar se as repostas sao validas se a verdade é mesmo verdade
+    return []
+
+
+
+
+
+def _analise_sonar_results(manager, context_report: dict[str, Any],sonar_results: list[dict]) -> None:
+    #roda analise dos resultados do sonar, atualiza memoria e contexto de cada role com o resultado da analise
+    #update belif state
+    return
