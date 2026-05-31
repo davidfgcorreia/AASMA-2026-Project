@@ -191,8 +191,15 @@ class GameLoop:
                             # its false_type / false_value before applying.
                             def_manager = self.agent_managers.get(defending_team)
                             if def_manager is not None:
+                                # Pass the attacker's belief about the defending team
+                                # so the agent can lie with a plausible position.
+                                attacker_belief = (
+                                    self.belief_blue if defending_team == "RED"
+                                    else self.belief_red
+                                ).heatmap()
                                 response = manager_api.get_sonar_response(
-                                    def_manager, sonar_action, self.state
+                                    def_manager, sonar_action, self.state,
+                                    attacker_belief=attacker_belief,
                                 )
                                 sonar_action.payload.update(response)
                             self._apply_actions([sonar_action], advance_turn=True)
@@ -269,8 +276,13 @@ class GameLoop:
                             defending_team = self._other_team(active_team)
                             def_manager = self.agent_managers.get(defending_team)
                             if def_manager is not None:
+                                attacker_belief = (
+                                    self.belief_blue if defending_team == "RED"
+                                    else self.belief_red
+                                ).heatmap()
                                 response = manager_api.get_sonar_response(
-                                    def_manager, sonar_action, self.state
+                                    def_manager, sonar_action, self.state,
+                                    attacker_belief=attacker_belief,
                                 )
                                 sonar_action.payload.update(response)
                             self._apply_actions([sonar_action], advance_turn=True)

@@ -758,10 +758,17 @@ def get_state_snapshot(manager, state: GameState, turn_id: int | None = None) ->
     return snapshot_game_state(state, turn_id=turn_id)
 
 
-def get_sonar_response(manager, sonar_action: Action, state: GameState) -> dict[str, Any]:
+def get_sonar_response(
+    manager,
+    sonar_action: Action,
+    state: GameState,
+    attacker_belief: list | None = None,
+) -> dict[str, Any]:
     """Ask the defending agent team for a sonar response payload.
 
     Called by game_loop when this team is queried by enemy SONAR.
+    ``attacker_belief`` is the attacker's belief heatmap about the defending
+    team's position (a 2-D list of floats from BeliefTracker.heatmap()).
     Returns ``{"false_type": str, "false_value": int|str}`` which the caller
     injects into ``sonar_action.payload`` before applying the action.
     """
@@ -772,9 +779,9 @@ def get_sonar_response(manager, sonar_action: Action, state: GameState) -> dict[
     context_report: dict[str, Any] = {
         "team_view": team_view,
         "sonar_action": sonar_action,
+        "attacker_belief": attacker_belief,
     }
     result = _response_to_sonar(manager, context_report)
-    # Ensure we always return a dict with the required keys
     if not isinstance(result, dict):
         result = {}
     return result

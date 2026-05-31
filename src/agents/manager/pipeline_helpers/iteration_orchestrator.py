@@ -20,10 +20,12 @@ from typing import Any
 from captain_sonar.actions import Action, ActionType
 from captain_sonar.game_state import GameState
 from .manager_helpers import _extract_section
+from .manager_helpers import _append_ro_intel_to_play_context
 from .manager_helpers import answer_communications
 from .manager_helpers import build_turn_start_context_bundle
 from .manager_helpers import extract_communications
 from .manager_helpers import run_discussion_call
+from .manager_helpers import run_radio_operator_phase
 from .manager_helpers import run_strategy_alignment
 from .manager_helpers import write_play_context_for_manager
 from .manager_helpers import run_turn_start_call
@@ -38,12 +40,22 @@ def run_turn_start_phase(manager, state: GameState) -> dict[str, Any]:
     from .manager_api import begin_turn as manager_begin_turn
 
     context_report = manager_begin_turn(manager, state)
+    team_view = context_report["team_view"]
+
     write_play_context_for_manager(
         manager,
-        context_report["team_view"],
+        team_view,
         round_type=context_report["round_type"],
         source=context_report["source"],
     )
+
+    # Radio operator runs before the other agents so its intel is visible
+    # in play_context.md when build_turn_start_context_bundle reads it.
+    try:
+        ro_messages = run_radio_operator_phase(manager, team_view)
+        _append_ro_intel_to_play_context(ro_messages)
+    except Exception as exc:
+        print(f"[iteration_orchestrator] radio operator phase failed: {exc}")
 
     bundle = build_turn_start_context_bundle(manager, context_report)
     bundle["turn_start_results"] = run_turn_start_call(manager, bundle)
