@@ -184,8 +184,22 @@ class GameLoop:
                     else:
                         phase_by_team[active_team] = "system"
                 else:
-                    if sonar_action is not None and not self._is_agent_team(self._other_team(active_team)):
-                        self.sonar_modal.start(sonar_action, self._other_team(active_team))
+                    if sonar_action is not None:
+                        defending_team = self._other_team(active_team)
+                        if self._is_agent_team(defending_team):
+                            # Agent-vs-agent sonar: ask the defending manager for
+                            # its false_type / false_value before applying.
+                            def_manager = self.agent_managers.get(defending_team)
+                            if def_manager is not None:
+                                response = manager_api.get_sonar_response(
+                                    def_manager, sonar_action, self.state
+                                )
+                                sonar_action.payload.update(response)
+                            self._apply_actions([sonar_action], advance_turn=True)
+                            self._record_turn([sonar_action], active_team)
+                        else:
+                            # Defending team is human: show the UI modal.
+                            self.sonar_modal.start(sonar_action, defending_team)
                     else:
                         system_actions = [system_action] if system_action is not None else []
                         self._apply_actions(system_actions, advance_turn=True)
@@ -244,6 +258,26 @@ class GameLoop:
                             self.sonar_modal.start(sonar_action, self._other_team(active_team))
                             active_controller.reset_turn()
                             phase_by_team[active_team] = "move"
+                            phase_handled = True
+                        elif (
+                            sonar_action is not None
+                            and self._can_start_sonar_response(active_team)
+                            and self._is_agent_team(self._other_team(active_team))
+                        ):
+                            # Human fires sonar, defending team is an agent:
+                            # ask the defending manager for its false_type / false_value.
+                            defending_team = self._other_team(active_team)
+                            def_manager = self.agent_managers.get(defending_team)
+                            if def_manager is not None:
+                                response = manager_api.get_sonar_response(
+                                    def_manager, sonar_action, self.state
+                                )
+                                sonar_action.payload.update(response)
+                            self._apply_actions([sonar_action], advance_turn=True)
+                            self._record_turn([sonar_action], active_team)
+                            active_controller.reset_turn()
+                            phase_by_team[active_team] = "move"
+                            active_team = self._other_team(active_team)
                             phase_handled = True
                         elif sonar_action is not None and not self._can_start_sonar_response(active_team):
                             active_controller.confirmed = False

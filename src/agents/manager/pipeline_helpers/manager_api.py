@@ -757,6 +757,29 @@ def build_role_view(manager, role) -> dict[str, Any]:
 def get_state_snapshot(manager, state: GameState, turn_id: int | None = None) -> dict[str, Any]:
     return snapshot_game_state(state, turn_id=turn_id)
 
+
+def get_sonar_response(manager, sonar_action: Action, state: GameState) -> dict[str, Any]:
+    """Ask the defending agent team for a sonar response payload.
+
+    Called by game_loop when this team is queried by enemy SONAR.
+    Returns ``{"false_type": str, "false_value": int|str}`` which the caller
+    injects into ``sonar_action.payload`` before applying the action.
+    """
+    from captain_sonar.api import get_team_view as _get_team_view
+    from .manager_helpers import _response_to_sonar
+
+    team_view = _get_team_view(state, manager.team)
+    context_report: dict[str, Any] = {
+        "team_view": team_view,
+        "sonar_action": sonar_action,
+    }
+    result = _response_to_sonar(manager, context_report)
+    # Ensure we always return a dict with the required keys
+    if not isinstance(result, dict):
+        result = {}
+    return result
+
+
 def _get_captain_action(manager, context_report):
     """Get a draft action from the captain for the voting round."""
     from .manager_helpers import run_captain_finalization_call
