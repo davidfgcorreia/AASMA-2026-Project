@@ -282,14 +282,11 @@ class GameLoop:
     def _choose_agent_actions(self, team: str) -> list[Action | None]:
         manager = self.agent_managers.get(team)
         if manager is None:
-            print(f"[agent] team={team} manager=None")
             return [None, None]
         try:
             actions = manager_api.collect_actions(manager, self.state)
-            print(f"[agent] team={team} raw_actions={actions}")
             return self._split_actions_by_phase(actions)
         except NotImplementedError:
-            print(f"[agent] team={team} collect_actions not implemented")
             return [None, None]
 
     def _split_actions_by_phase(self, actions: list[Action]) -> list[Action | None]:
@@ -313,13 +310,10 @@ class GameLoop:
             ),
             None,
         )
-        print(f"[game_loop] split_actions move={move_action} system={system_action}")
         return [move_action, system_action]
 
     def _apply_actions(self, actions: list[Action], *, advance_turn: bool) -> None:
-        print(f"[game_loop] apply_actions advance_turn={advance_turn} actions={actions}")
         self.state.apply_actions(order_actions(actions), increment_turn=advance_turn)
-        print(f"[game_loop] events={self.state.events}")
         self.belief_blue.update(self.state.events)
         self.belief_red.update(self.state.events)
         if advance_turn:

@@ -42,7 +42,6 @@ def _run_radio_operator_phase(manager, team_view: dict[str, Any]) -> None:
     """
     from agents.base import AgentRole
     from ..views import build_role_view as _build_role_view
-    from .manager_api import read_inbox as _read_inbox
     from ..models import AgentMessage
 
     ro_role = AgentRole.RADIO_OPERATOR
@@ -55,7 +54,7 @@ def _run_radio_operator_phase(manager, team_view: dict[str, Any]) -> None:
         team_view=team_view,
         turn_id=manager._turn_id,
         active_roles=manager._active_roles,
-        inbox_reader=lambda r: _read_inbox(manager, r),
+        inbox_reader=lambda r: manager._inbox.get(r, []),
     )
 
     try:
@@ -93,9 +92,7 @@ def run_turn_start_phase(manager, state: GameState) -> dict[str, Any]:
         round_type=context_report["round_type"],
         source=context_report["source"],
     )
-    # Run radio operator first so its intel lands in the Captain's inbox
-    # before captain/first_mate/engineer run their turn-start analysis.
-    _run_radio_operator_phase(manager, context_report["team_view"])
+
     bundle = build_turn_start_context_bundle(manager, context_report)
     bundle["turn_start_results"] = run_turn_start_call(manager, bundle)
     update_memory(manager, context_report, 0)
@@ -108,9 +105,13 @@ def run_discussion_phase(manager, state: GameState, max_iterations: int = 1, con
     return result
 
 
-def run_finalization_phase(manager, resolved_context_report: dict[str, Any]) -> list[dict[str, Any]]:
+def run_finalization_phase(
+    manager,
+    resolved_context_report: dict[str, Any],
+    previous_rejected_action_content: str | None = None,
+) -> list[dict[str, Any]]:
     from .manager_api import choose_turn_actions as manager_choose_turn_actions
-    accepted = manager_choose_turn_actions(manager, resolved_context_report)
+    accepted = manager_choose_turn_actions(manager, resolved_context_report, previous_rejected_action_content)
     return accepted
 
 def run_send_phase(manager, accepted: list[dict[str, Any]], team: str) -> list[Action]:
@@ -213,7 +214,6 @@ def run_iteration_cycle(manager, state: GameState, max_iterations: int, context_
 
         if should_stop_after_iteration:
             resolved_context_report["early_stop"] = True
-            print(f"Iteration {iteration+1}: Early stop requested by discussion outputs.")
             break
 
   

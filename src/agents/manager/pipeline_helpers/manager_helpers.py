@@ -322,8 +322,6 @@ def _run_turn_start_role(
     output_text = getattr(result, "text", "") or ""
     output_path = outputs_dir / f"{role_slug}_{team_name}_turn_{turn}.md"
     output_path.write_text(output_text, encoding="utf-8")
-    print(f"[manager_helpers] turn_start output role={role_name} path={output_path}\n{output_text}")
-
     return {
         "output_path": str(output_path),
         "output": output_text,
@@ -616,7 +614,6 @@ def update_memory(manager, context_report: dict[str, Any], discussion_update: in
 
         master_update = _extract_section(output_text, "Master Memory Update")
 
-        print(f"[manager_helpers] turn_start discussion update={discussion_update} role_output={output_file.name} master_update_length={len(master_update)} role_update_length={len(_extract_section(output_text, 'Memory Update'))}")
         if master_update:
             role = _role_from_output_filename(output_file.name)
             role_label = role.name.title().replace("_", " ") if role else "Turn"
@@ -701,7 +698,7 @@ def summarize_memory(manager, state: GameState | None = None) -> dict[str, Any]:
             role="MANAGER",
             api_key=_select_api_key(manager),
             temperature=0.4,
-            max_output_tokens=1024,
+            max_output_tokens=5000,
             timeout_seconds=60.0,
         )
 
@@ -1017,20 +1014,12 @@ def run_captain_finalization_call(
         if possible_actions
         else "[]"
     )
-    live_section = "\n".join([
-        "",
-        "## Possible Actions",
-        "```json",
-        possible_block,
-        "```",
-    ])
     full_context = base_context
     if extra_context:
         extra_block = extra_context.strip()
         if extra_block:
             full_context = "\n".join([full_context.rstrip(), "", extra_block, ""])
 
-    print(f" [hellper] full_context for captain finalization call:\n{full_context}")
 
     model_name = os.getenv("GEMINI_MODEL") or "gemini-3.1-flash-lite"
     result = call_agent_activity_with_context(

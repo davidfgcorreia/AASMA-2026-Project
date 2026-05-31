@@ -73,36 +73,25 @@ def prepare_turn_context(manager, state: GameState) -> dict[str, Any]:
 
 
 
-def propose_turn_action(manager, role, action: dict[str, Any]) -> bool:
-    if role not in manager._active_roles:
-        return False
-    normalized_action = dict(action)
-    manager._turn_action_proposals[role] = normalized_action
-    signature = action_signature(normalized_action)
-    voters = manager._turn_action_votes.setdefault(signature, set())
-    voters.add(role)
-    return True
-
-
-def omit_turn_action(manager, role) -> bool:
-    if role not in manager._active_roles:
-        return False
-    omitted_action = {"type": "OMIT", "role": role.value, "turn_id": manager._turn_id}
-    manager._turn_action_proposals[role] = omitted_action
-    return True
-
-
-def choose_turn_actions(manager, resolved_context_report: dict[str, Any]) -> list[dict[str, Any]]:
+def choose_turn_actions(
+    manager,
+    resolved_context_report: dict[str, Any],
+    previous_rejected_action_content: str | None = None,
+) -> list[dict[str, Any]]:
     """Select the final turn action(s).
 
     Tries ``choose_turn_actions_by_captain`` first.  Falls back to
     ``_choose_turn_actions_by_vote`` if the Captain path returns ``None``
     """
     print("Choosing turn actions...")
-    return choose_turn_actions_by_captain(manager, resolved_context_report)
+    return choose_turn_actions_by_captain(manager, resolved_context_report, previous_rejected_action_content)
 
 
-def choose_turn_actions_by_captain(manager, resolved_context_report: dict[str, Any]) -> list[dict[str, Any]]:
+def choose_turn_actions_by_captain(
+    manager,
+    resolved_context_report: dict[str, Any],
+    previous_rejected_action_content: str | None = None,
+) -> list[dict[str, Any]]:
     print ("Attempting to choose turn actions by Captain...")
     captain_role = next(
         (r for r in manager._active_roles if r.value == "CAPTAIN"),
@@ -115,6 +104,14 @@ def choose_turn_actions_by_captain(manager, resolved_context_report: dict[str, A
         pass
 
     invalid_note = ""
+    if previous_rejected_action_content:
+        invalid_note = "\n".join(
+            [
+                invalid_note,
+                "Previously this was proposed but not accepted:",
+                previous_rejected_action_content,
+            ]
+        ).strip()
     max_attempts = 5
     for _ in range(max_attempts):
         try:
@@ -157,19 +154,6 @@ def choose_turn_actions_by_captain(manager, resolved_context_report: dict[str, A
         if is_valid:
             accepted = [{"role": "CAPTAIN", **action} for action in actions]
             print(f"[manager_api] accepted captain actions={accepted}")
-
-            team_name = str(getattr(manager, "team", "team") or "team")
-            turn_id = int(getattr(manager, "_turn_id", 0) or 0)
-            update_master_memory(
-                "##Captain Finalized Actions",
-                "\n".join(
-                    [
-                        f"- team: {team_name}",
-                        f"- turn: {turn_id}",
-                        f"- actions: {json.dumps(accepted, ensure_ascii=True)}",
-                    ]
-                ),
-            )
 
             if manager._activation_until_actions_chosen:
                 manager._activation_deadline_ms = None
@@ -638,41 +622,6 @@ def _diagnose_button_issue(team_view: dict[str, Any], direction: Any, button_id:
 
     return f"invalid engineer button {button_id!r}"
 
-def send_message(manager, sender, recipient, text: str, metadata: dict[str, Any] | None = None) -> bool:
-    manager._inbox.setdefault(recipient, [])
-    message = AgentMessage(
-        sender=sender,
-        recipient=recipient,
-        text=text,
-        metadata=metadata or {},
-        turn_id=int(getattr(manager, "_turn_id", 0) or 0),
-    )
-    manager._inbox[recipient].append(message)
-    manager._messages_this_turn.append(message)
-    return True
-
-
-def broadcast(manager, sender, text: str, metadata: dict[str, Any] | None = None) -> bool:
-    sent = False
-    for role in getattr(manager, "_active_roles", []):
-        if role == sender:
-            continue
-        sent = send_message(manager, sender, role, text, metadata) or sent
-    return sent
-
-
-def read_inbox(manager, role) -> list[dict[str, Any]]:
-    inbox = getattr(manager, "_inbox", {}).get(role, [])
-    return [
-        {
-            "sender": message.sender.value if hasattr(message.sender, "value") else str(message.sender),
-            "recipient": message.recipient.value if hasattr(message.recipient, "value") else str(message.recipient),
-            "text": message.text,
-            "metadata": dict(message.metadata or {}),
-            "turn_id": message.turn_id,
-        }
-        for message in inbox
-    ]
 
 
 def collect_actions(
@@ -687,26 +636,33 @@ def collect_actions(
     
     approved = False
     attempt = 0
-    max_attempts = 5
+    max_attempts = 3
+
+    accepted = []
+    previous_rejected_action_content: str | None = None
+    
 
     while attempt < max_attempts and not approved:
-        captain_action = _get_captain_action(manager, context_report)
-        if not captain_action:
-            return []
+        accepted = run_finalization_phase(manager, context_report, previous_rejected_action_content)
 
         vote_yes = 0
         vote_no = 0
 
-        for role in manager._active_roles:
-            if role.value == "CAPTAIN":
-                continue
-            vote = _ask_vote(manager, role, captain_action, context_report)
-            if vote:
-                propose_turn_action(manager, role, captain_action)
-                vote_yes += 1
-            else:
-                omit_turn_action(manager, role)
-                vote_no += 1
+        # Simple parallel voting using up to 3 worker threads.
+        roles_to_vote = [r for r in manager._active_roles if r.value != "RADIO_OPERATOR"]
+        if roles_to_vote:
+            from concurrent.futures import ThreadPoolExecutor
+
+            max_workers = min(3, len(roles_to_vote))
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                votes = list(
+                    executor.map(lambda r: _ask_vote(manager, r, accepted, context_report), roles_to_vote)
+                )
+            for role, vote in zip(roles_to_vote, votes):
+                if vote:
+                    vote_yes += 1
+                else:
+                    vote_no += 1
 
         # Approval check is OUTSIDE the role loop — tallied after all votes
         approved = vote_yes > vote_no
@@ -715,12 +671,23 @@ def collect_actions(
         else:
             print(f"[voting] Rejected ({vote_yes}/{vote_no}), captain retrying...")
             context_report["vote_feedback"] = f"Rejected. Need {vote_no + 1} yes votes."
+            previous_rejected_action_content = json.dumps(accepted, ensure_ascii=True)
             attempt += 1
 
-    if not approved:
-        return []
 
-    accepted = run_finalization_phase(manager, context_report)
+    team_name = str(getattr(manager, "team", "team") or "team")
+    turn_id = int(getattr(manager, "_turn_id", 0) or 0)
+    update_master_memory(
+        "##Captain Finalized Actions",
+        "\n".join(
+            [
+                f"- team: {team_name}",
+                f"- turn: {turn_id}",
+                f"- actions: {json.dumps(accepted, ensure_ascii=True)}",
+            ]
+        ),
+    )
+
     actions = run_send_phase(manager, accepted, manager.team)
     summarize_memory(manager, state)
     return actions
@@ -742,10 +709,25 @@ def execute_turn_actions(manager, state: GameState, intents: list[dict[str, Any]
     return record_dict
 
 
-def get_possible_actions(manager, role, state: GameState | None = None) -> List[dict[str, Any]]:
+def get_possible_actions(manager, role, state: GameState | None = None) -> list[dict[str, Any]]:
     if state is not None:
         team_view = get_team_view(state, manager.team)
-        role_view = _build_role_view(role=role, team_view=team_view, turn_id=state.turn, active_roles=manager._active_roles, inbox_reader=lambda r: read_inbox(manager, r))
+        role_view = _build_role_view(
+            role=role,
+            team_view=team_view,
+            turn_id=state.turn,
+            active_roles=manager._active_roles,
+            inbox_reader=lambda r: [
+                {
+                    "sender": message.sender.value if hasattr(message.sender, "value") else str(message.sender),
+                    "recipient": message.recipient.value if hasattr(message.recipient, "value") else str(message.recipient),
+                    "text": message.text,
+                    "metadata": dict(message.metadata or {}),
+                    "turn_id": message.turn_id,
+                }
+                for message in getattr(manager, "_inbox", {}).get(r, [])
+            ],
+        )
     else:
         role_view = build_role_view(manager, role)
     from captain_sonar.possible_actions import possible_actions_for_role
@@ -759,7 +741,16 @@ def build_role_view(manager, role) -> dict[str, Any]:
         team_view=manager._last_team_view,
         turn_id=manager._turn_id,
         active_roles=manager._active_roles,
-        inbox_reader=lambda r: read_inbox(manager, r),
+        inbox_reader=lambda r: [
+            {
+                "sender": message.sender.value if hasattr(message.sender, "value") else str(message.sender),
+                "recipient": message.recipient.value if hasattr(message.recipient, "value") else str(message.recipient),
+                "text": message.text,
+                "metadata": dict(message.metadata or {}),
+                "turn_id": message.turn_id,
+            }
+            for message in getattr(manager, "_inbox", {}).get(r, [])
+        ],
     )
 
 
@@ -799,17 +790,39 @@ def _ask_vote(manager, role, action, context):
     from agents.common.functions import call_agent_activity_with_context
     from pathlib import Path
 
+    normalized_action = action
+    if isinstance(normalized_action, list):
+        if len(normalized_action) == 1 and isinstance(normalized_action[0], dict):
+            normalized_action = normalized_action[0]
+        else:
+            normalized_action = {"type": "FULL_ACTION_PAYLOAD", "payload": {"actions": normalized_action}}
+    if not isinstance(normalized_action, dict):
+        normalized_action = {"type": "UNKNOWN", "payload": {}}
+
     # Prompt lives in src/agents/manager/prompts/, one level above pipeline_helpers/
     prompt_path = Path(__file__).parent.parent / "prompts" / "6_action_vote.md"
     prompt_template = prompt_path.read_text(encoding="utf-8")
 
+    team_name = str(getattr(manager, "team", "RED") or "RED").lower()
+    role_name = str(getattr(role, "value", role) or "role").lower()
+    context_dir = Path(__file__).resolve().parents[1] / "contexts"
+    context_path = context_dir / f"{role_name}_{team_name}.md"
+    if not context_path.exists():
+        fallback_path = context_dir / f"{role_name}_red.md"
+        if fallback_path.exists():
+            context_path = fallback_path
+    role_context = context_path.read_text(encoding="utf-8") if context_path.exists() else ""
+
+
     turn = (context.get("team_view") or {}).get("turn", 0)
     prompt = prompt_template.format(
         role=role.value,
-        action_type=action.get("type", "UNKNOWN"),
-        action_payload=json.dumps(action.get("payload", {})),
+        action_type=normalized_action.get("type", "UNKNOWN"),
+        action_payload=json.dumps(normalized_action.get("payload", {})),
         turn=turn,
     )
+
+
 
     # Small delay to avoid rate-limit bursts when 3 votes fire back-to-back
     time.sleep(2)
@@ -818,7 +831,7 @@ def _ask_vote(manager, role, action, context):
         result = call_agent_activity_with_context(
             model="gemini-3.1-flash-lite",
             prompt=prompt,
-            context="",
+            context=role_context,
             role=role.value,
             api_key=_select_api_key(manager),
             temperature=0.2,
