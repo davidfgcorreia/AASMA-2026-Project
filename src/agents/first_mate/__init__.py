@@ -1,3 +1,3 @@
-from .agent import FirstMateAgent, ModelFirstMateAgent
+"""First Mate role package."""
 
-__all__ = ["FirstMateAgent", "ModelFirstMateAgent"]
+__all__: list[str] = []

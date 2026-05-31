@@ -116,6 +116,7 @@ image.png
 # Project runtime/generated artifacts
 test.txt
 src/agents/**/memory.md
+src/agents/manager/communications/
 src/agents/common/master_memory.md
 src/agents/manager/outputs/
 src/agents/manager/contexts/

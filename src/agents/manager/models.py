@@ -33,7 +33,13 @@ class AgentMessage:
 
 @dataclass
 class ExecutionRecord:
-    record: dict | None = None
+    turn_id: int
+    accepted_intents: list[dict[str, Any]]
+    executed_actions: list[dict[str, Any]]
+    rejected_intents: list[dict[str, Any]]
+    events: list[dict[str, Any]]
+    success: bool
+    errors: list[str]
 
 
 class TeamOperatingMode(Enum):

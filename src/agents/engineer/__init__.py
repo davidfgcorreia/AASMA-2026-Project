@@ -1,3 +1,3 @@
-from .agent import EngineerAgent
+"""Engineer role package."""
 
-__all__ = ["EngineerAgent"]
+__all__: list[str] = []

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-import time
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 from typing import List
@@ -10,19 +8,14 @@ from captain_sonar.api import get_team_view
 from captain_sonar.game_state import GameState
 from captain_sonar.map_loader import MapData
 
-from ..common.functions import action_signature
-from .api_adapter import ManagerGameApiAdapter
 from .pipeline_helpers.iteration_orchestrator import run_iteration_cycle
 from .pipeline_helpers.manager_helpers import (
-    render_play_context,
     now_ms,
     write_turn_actions_ledger_for_manager,
 )
 from .pipeline_helpers import manager_api as manager_api
 
 from .views import build_role_view
-from .messaging import send_message as _send_message, broadcast as _broadcast, read_inbox as _read_inbox, serialize_message as _serialize_message
-from captain_sonar.possible_actions import possible_actions_for_role
 from captain_sonar.api import snapshot_game_state
 
 from agents.manager.startup.start_position import start_position
@@ -38,6 +31,14 @@ def derive_active_roles(config, registered_roles, requested_roles, strict=False)
         return set(registered_roles)
     # intersect requested with registered
     return set(r for r in requested_roles if r in registered_roles)
+
+
+class _DefaultTeamAgent(AgentBase):
+    def __init__(self, team: str, role: AgentRole) -> None:
+        super().__init__(team, role)
+
+    def propose_action(self, view):
+        return {"messages": [], "action": None}
 
 
 class TeamAgentManager:
@@ -100,20 +101,6 @@ class TeamAgentManager:
         """Return True if ledgers are enabled for this manager instance."""
         return not getattr(self.config, "disable_ledgers", False)
 
-    def print_ledger_info(self, *, verbose: bool = False) -> str:
-        """Return a short summary of ledger configuration for debugging.
-
-        If `verbose` True, include the resolved path and enabled flag.
-        """
-        base = self.ledger_base_path
-        enabled = self.ledgers_enabled
-        summary = f"ledger_base_path={base}\nledgers_enabled={enabled}"
-        if verbose:
-            # include current proposals/votes counts for quick inspection
-            summary += f"\nactive_roles={[r.value for r in sorted(self._active_roles, key=lambda v: v.value)]}"
-            summary += f"\nproposals={list(self._turn_action_proposals.keys())}"
-        return summary
-
     def register_agent(self, agent: AgentBase, active: bool = True) -> None:
         if agent.team != self.team:
             raise ValueError(f"agent team {agent.team!r} does not match manager team {self.team!r}")
@@ -128,16 +115,10 @@ class TeamAgentManager:
         )
 
     def _initialize_default_agents(self) -> None:
-        # Import locally to avoid loading agent modules unless needed.
-        from agents.captain.agent import ModelCaptainAgent
-        from agents.first_mate.agent import ModelFirstMateAgent
-        from agents.engineer.agent import ModelEngineerAgent
-        from agents.radio_operator.agent import ModelRadioOperatorAgent
-
-        self.register_agent(ModelCaptainAgent(self.team), active=True)
-        self.register_agent(ModelFirstMateAgent(self.team), active=True)
-        self.register_agent(ModelEngineerAgent(self.team), active=True)
-        self.register_agent(ModelRadioOperatorAgent(self.team), active=True)
+        self.register_agent(_DefaultTeamAgent(self.team, AgentRole.CAPTAIN), active=True)
+        self.register_agent(_DefaultTeamAgent(self.team, AgentRole.FIRST_MATE), active=True)
+        self.register_agent(_DefaultTeamAgent(self.team, AgentRole.ENGINEER), active=True)
+        self.register_agent(_DefaultTeamAgent(self.team, AgentRole.RADIO_OPERATOR), active=True)
 
     def set_active_roles(self, roles: Iterable[AgentRole]) -> None:
         self._active_roles = derive_active_roles(
@@ -202,19 +183,11 @@ class TeamAgentManager:
         self._pair_counts.clear()
         self._pair_counts.clear()
 
-    def get_strategy_profile(self) -> dict[str, Any] | None:
-        """Return the selected strategy profile for this manager, if any."""
-        return dict(self._strategy_profile) if self._strategy_profile is not None else None
-
-    def get_role_prompt(self, role: AgentRole) -> str | None:
-        """Return the starting prompt for the given role, if available."""
-        return None
-
     def get_state_snapshot(self, state: GameState, turn_id: int | None = None) -> dict[str, Any]:
         """Return a JSON-friendly snapshot of the provided game state."""
         return manager_api.get_state_snapshot(self, state, turn_id=turn_id)
 
     def run_turn_cycle(self, state: GameState, max_iterations: int = 1) -> dict[str, Any]:
         """Run one turn through the direct manager action pipeline."""
-        actions = manager_api.collect_actions_with_voting(self, state, max_iterations=max_iterations)
+        actions = manager_api.collect_actions(self, state, max_iterations=max_iterations)
         return {"turn_id": state.turn, "actions": actions}

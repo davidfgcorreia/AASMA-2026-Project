@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Iterable, Mapping, List
+from typing import Any
 from dataclasses import asdict
 
-from agents import manager
 from captain_sonar.actions import Action, ActionType
 from captain_sonar.config import GAUGE_MAX_DEFAULT
 from captain_sonar.api import get_team_view, snapshot_game_state
@@ -12,9 +11,8 @@ from captain_sonar.game_state import GameState
 
 from .manager_helpers import _select_api_key, run_captain_finalization_call
 
-from ..models import AgentMessage, GridPos, StartPositionPicker
+from ..models import AgentMessage
 from ..views import build_role_view as _build_role_view
-from ..messaging import send_message as _send_message, broadcast as _broadcast, read_inbox as _read_inbox
 from ..startup.start_position import start_position as start_position
 from ...common.functions import action_signature, update_master_memory
 
@@ -641,24 +639,40 @@ def _diagnose_button_issue(team_view: dict[str, Any], direction: Any, button_id:
     return f"invalid engineer button {button_id!r}"
 
 def send_message(manager, sender, recipient, text: str, metadata: dict[str, Any] | None = None) -> bool:
-    return _send_message(manager, sender, recipient, text, metadata)
+    manager._inbox.setdefault(recipient, [])
+    message = AgentMessage(
+        sender=sender,
+        recipient=recipient,
+        text=text,
+        metadata=metadata or {},
+        turn_id=int(getattr(manager, "_turn_id", 0) or 0),
+    )
+    manager._inbox[recipient].append(message)
+    manager._messages_this_turn.append(message)
+    return True
 
 
 def broadcast(manager, sender, text: str, metadata: dict[str, Any] | None = None) -> bool:
-    return _broadcast(manager, sender, text, metadata)
+    sent = False
+    for role in getattr(manager, "_active_roles", []):
+        if role == sender:
+            continue
+        sent = send_message(manager, sender, role, text, metadata) or sent
+    return sent
 
 
 def read_inbox(manager, role) -> list[dict[str, Any]]:
-    return _read_inbox(manager, role)
-
-
-def collect_actions_with_voting(
-    manager,
-    state: GameState,
-    max_iterations: int = 1,
-) -> list[Action]:
-    """Alias for collect_actions (kept for backwards compatibility)."""
-    return collect_actions(manager, state, max_iterations=max_iterations)
+    inbox = getattr(manager, "_inbox", {}).get(role, [])
+    return [
+        {
+            "sender": message.sender.value if hasattr(message.sender, "value") else str(message.sender),
+            "recipient": message.recipient.value if hasattr(message.recipient, "value") else str(message.recipient),
+            "text": message.text,
+            "metadata": dict(message.metadata or {}),
+            "turn_id": message.turn_id,
+        }
+        for message in inbox
+    ]
 
 
 def collect_actions(
@@ -737,29 +751,6 @@ def get_possible_actions(manager, role, state: GameState | None = None) -> List[
     from captain_sonar.possible_actions import possible_actions_for_role
 
     return possible_actions_for_role(role.value, role_view)
-
-
-def team_view(manager) -> dict[str, Any]:
-    return dict(manager._last_team_view)
-
-
-def turn_action_status(manager) -> dict[str, Any]:
-    return {
-        "turn_id": manager._turn_id,
-        "operating_mode": manager.config.operating_mode.value,
-        "human_role": manager.config.human_role.value if manager.config.human_role is not None else None,
-        "active_roles": [role.value for role in sorted(manager._active_roles, key=lambda value: value.value)],
-        "activation_deadline_ms": manager._activation_deadline_ms,
-        "activation_until_actions_chosen": manager._activation_until_actions_chosen,
-        "proposals": [
-            {"role": role.value, **proposal}
-            for role, proposal in manager._turn_action_proposals.items()
-        ],
-        "votes": {
-            signature: [role.value for role in sorted(voters, key=lambda value: value.value)]
-            for signature, voters in manager._turn_action_votes.items()
-        },
-    }
 
 
 def build_role_view(manager, role) -> dict[str, Any]:

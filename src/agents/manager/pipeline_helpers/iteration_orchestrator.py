@@ -42,7 +42,7 @@ def _run_radio_operator_phase(manager, team_view: dict[str, Any]) -> None:
     """
     from agents.base import AgentRole
     from ..views import build_role_view as _build_role_view
-    from ..messaging import read_inbox as _read_inbox
+    from .manager_api import read_inbox as _read_inbox
     from ..models import AgentMessage
 
     ro_role = AgentRole.RADIO_OPERATOR
