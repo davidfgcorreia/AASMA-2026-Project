@@ -292,7 +292,7 @@ def render_play_context(team_view: dict[str, Any], *, round_type: str, source: s
 
         "own_submarine": team_view.get("own_submarine"),
 
-        "own_gauges": team_view.get("own_gauges"),
+        "own_gauges (X/4)" : team_view.get("own_gauges"),
 
         "engineer_board": team_view.get("engineer_board"),
 

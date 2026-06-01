@@ -12,6 +12,7 @@ The turn can have **one or two parts**, aligned with the engine's action resolut
 If there is no system activation this turn, return only Part 1.
 
 If a inteligence or stealth system activation is possible(the system is fully loaded and there is no breakdown choice crossed for this type of system  red for ofencives, yellow for inteligence and green for stealth), it must be Part 2(this system are benefic to be used as soon as they are possssible to gain information or stealth advantage for the next turns).
+If the systeam is blocked by a breakdown choice, you can keep teh system fully loaded, load stealf and them surface to clear the board and have all systems available again, or you can choose to move in a direction that does not require crossing the breakdown choice that is blocking the system you want to use.
 
 If a system is already partially charged or nearly complete, prefer finishing that load before starting a different one unless safety or a stronger tactical need clearly overrides it.
 
