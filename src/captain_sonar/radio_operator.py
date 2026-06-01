@@ -22,7 +22,7 @@ from .belief_tracker import BeliefTracker
 from .map_loader import MapData
 from .config import SECTOR_COLS, SECTOR_ROWS
 
-
+MAX_SILENCE_STEPS = 4
 class RadioOperator:
     """
     Tracks enemy submarine position through:
