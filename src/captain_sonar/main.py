@@ -7,6 +7,7 @@ import random
 import pygame
 
 from agents.manager.manager import TeamAgentManager
+from agents.manager.pipeline_helpers.manager_helpers import reset_agent_state
 
 from .config import (
     MAP_BACKGROUND_PATH,
@@ -102,6 +103,10 @@ def main() -> None:
         turn_start_log=args.log_turn_starts,
         possible_actions_path=possible_actions_log,
     )
+    # Reset agent memory/scratch state so every game starts clean.
+    if agent_managers:
+        reset_agent_state()
+
     loop = GameLoop(
         state,
         renderer,
