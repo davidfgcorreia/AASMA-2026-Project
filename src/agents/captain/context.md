@@ -26,6 +26,8 @@ These are the systems the Captain may request to charge or activate. Use the tea
 - `SILENCE`: Stealth move — allows movement without announcing trajectory (requires a direction and steps). Useful for repositioning safely.
 - `MINE` / `TRIGGER_MINE`: Place or trigger mines at coordinates; tactical area-denial or opportunistic damage.
 
+When a system is already partially charged, prioritize completing that load before starting a different system, unless safety or a stronger tactical need clearly overrides it.
+
 System selection should be justified by expected information gain (SONAR/DRONE) or by damage mitigation / scoring opportunity (TORPEDO/MINE). When uncertain, prefer information-gathering systems.
 
 ## The Engineer Board (how it works and what to provide)

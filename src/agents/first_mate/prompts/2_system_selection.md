@@ -7,6 +7,8 @@ Using the locked strategy from Phase 1 and the Captain's intent, confirm whether
 2. **Fallback** — Provide one fallback system with brief rationale.
 3. **Questions (optional)** — Ask any targeted questions to `CAPTAIN`, `ENGINEER`, or `MANAGER` needed to finalize the decision.
 
+If a system is already partially charged, prefer completing that load before recommending a different system unless a tactical reason makes the switch better.
+
 ## Output Format
 Return your response in this exact order and do not add any extra text:
 

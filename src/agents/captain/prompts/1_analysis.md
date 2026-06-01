@@ -11,7 +11,7 @@ Carefully review the current game state, your role memory, the shared master mem
 5. **System load rationale** — Recommend a system to load and explain why loading that system is preferable now.
 6. **Memory instructions** — Save the full, detailed reasoning above into the Captain role memory. Also produce a concise summary suitable for the shared master memory.
 
-Focus on preserving tactical options, safety (avoiding illegal moves), and enabling the Engineer to act on clearly stated button choices if relevant.
+Focus on preserving tactical options, safety (avoiding illegal moves), completing any already-started system load before starting a different one when feasible, and enabling the Engineer to act on clearly stated button choices if relevant.
 
 ## Output Format
 Return only the two sections below, in this exact order, with no extra text before or after:

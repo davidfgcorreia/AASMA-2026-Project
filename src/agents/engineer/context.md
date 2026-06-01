@@ -40,6 +40,8 @@ The Engineer monitors and manages breakdowns that arise from Captain movement ch
 	- circuit part and function type (e.g., `down/yellow`) and whether it is currently crossed
 	- expected side-effects (which systems will be blocked or freed)
 
+When a system load is already in progress or nearly complete, prefer button choices that help finish that load before starting support for a different system, unless a safety issue or a more urgent tactical need overrides it.
+
 ## Response Style
 
 - Be explicit: when asked a question by the Captain or Manager, report the exact `button_id`s that are crossed and the specific circuits affected.

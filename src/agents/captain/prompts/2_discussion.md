@@ -11,7 +11,7 @@ Using the Phase 1 analysis as input, do the following in order:
 5. **Strategic Rationale & Next Moves** — Provide concise reasoning tying the direction and system choices to the next-move strategy (what we expect to do in subsequent turns).
 6. **Questions (optional)** — List any targeted questions for the engineer or first_mate to resolve remaining uncertainty.
 
-Be explicit and justify every recommendation: list hazards, why an alternative was rejected, and any circuit/button constraints that affected your recommendation.
+Be explicit and justify every recommendation: list hazards, why an alternative was rejected, any circuit/button constraints that affected your recommendation, and whether an already-started system load should be completed before starting a different one.
 
 ## Output Format
 Return your response in this exact order and do not add any extra text. Use the headers exactly as shown.

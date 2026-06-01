@@ -25,6 +25,8 @@ The First Mate is the team's system-readiness officer: their primary role is to 
 - Report any blockers (full gauges, conflicting priorities) immediately.
 - Coordinate charge choices and timing with the Captain and Engineer.
 
+When a system is already partially charged, prioritize completing that load before proposing a different system, unless the Captain's current tactical intent makes a switch clearly better.
+
 
 ## Guidance — Circuit-aware breakdown selection
 

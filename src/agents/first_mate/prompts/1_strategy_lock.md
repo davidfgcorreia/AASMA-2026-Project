@@ -5,6 +5,7 @@ Review the First Mate context and the Captain's stated intent before selecting a
 Task:
 - Confirm the current charge state and gauge availability.
 - Use the Captain's stated intent to prioritize which systems should be charged next.
+- If a system is already partially charged, prioritize completing that load before starting a different system unless the Captain's current intent clearly favors a switch.
 - Produce one recommended system to charge and one fallback, with brief rationale.
 
 Output format:

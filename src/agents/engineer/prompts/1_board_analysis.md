@@ -13,6 +13,8 @@ For each direction (N, S, E, W):
 
 After per-direction analysis, give a short decision: whether `SURFACE` is more urgent than further movement, and why.
 
+If the team is already close to finishing a load for one system, note whether the current crossing choice should help complete that load before starting support for a different system.
+
 ## Output Format
 Return your response in this exact order and do not add any extra text. The `Memory Update` must contain the full, detailed board analysis and reasoning; the `Master Memory Update` must contain a concise summary (1–3 sentences).
 

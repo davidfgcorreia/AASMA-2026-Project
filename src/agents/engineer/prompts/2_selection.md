@@ -12,6 +12,8 @@ From the Phase 1 analysis, do the following in order:
 
 Be explicit and actionable: include exact `engineer_button_id`s and circuit parts where relevant.
 
+When a system load is already nearly complete, prefer button choices that finish that load before enabling a different system, unless a safety issue or stronger tactical need overrides it.
+
 ## Output Format
 Return your response in this exact order and do not add any extra text. Use the headers exactly as shown.
 

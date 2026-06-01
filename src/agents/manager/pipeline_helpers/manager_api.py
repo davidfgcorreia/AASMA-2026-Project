@@ -627,7 +627,7 @@ def _diagnose_button_issue(team_view: dict[str, Any], direction: Any, button_id:
 def collect_actions(
     manager,
     state: GameState,
-    max_iterations: int = 1,
+    max_iterations: int = 2,
 ) -> list[Action]:
     rotation = int(getattr(manager, "_api_rotation_counter", 0) or 0)
     setattr(manager, "_api_rotation_counter", rotation)
@@ -636,7 +636,7 @@ def collect_actions(
     
     approved = False
     attempt = 0
-    max_attempts = 3
+    max_attempts = 2
 
     accepted = []
     previous_rejected_action_content: str | None = None
