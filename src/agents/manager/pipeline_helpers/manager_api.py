@@ -787,33 +787,6 @@ def get_sonar_response(
     return result
 
 
-def _get_captain_action(manager, context_report):
-    """Get a draft action from the captain for the voting round."""
-    from .manager_helpers import run_captain_finalization_call
-
-    captain_role = next(
-        (r for r in manager._active_roles if r.value == "CAPTAIN"),
-        None,
-    )
-    possible: list[dict] = []
-    try:
-        possible = get_possible_actions(manager, captain_role)
-    except Exception:
-        pass
-
-    try:
-        result = run_captain_finalization_call(
-            manager,
-            possible,
-            context_report,
-            extra_context=context_report.get("vote_feedback", ""),
-        )
-    except Exception:
-        return None
-
-    actions = result.get("actions") or ([result.get("action")] if result.get("action") else [])
-    return actions[0] if actions else None
-
 
 def _ask_vote(manager, role, action, context):
     import time

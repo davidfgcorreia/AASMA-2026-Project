@@ -2053,7 +2053,14 @@ def run_captain_finalization_call(
 
     team_name = team.replace(" ", "_").lower()
 
+    capitanpath = Path(__file__).resolve().parents[2] / "captain" / "memory.md"
 
+    current_memory = capitanpath.read_text(encoding="utf-8")
+
+
+    if extra_context:
+
+        capitanpath.write_text(current_memory + "\n" + extra_context + "\n", encoding="utf-8")
 
     bundle = build_turn_start_context_bundle(manager, resolved_context_report)
 
@@ -2083,13 +2090,7 @@ def run_captain_finalization_call(
 
     full_context = base_context
 
-    if extra_context:
-
-        extra_block = extra_context.strip()
-
-        if extra_block:
-
-            full_context = "\n".join([full_context.rstrip(), "", extra_block, ""])
+    full_context = "\n".join([full_context, "", possible_block, ""])
 
 
 
