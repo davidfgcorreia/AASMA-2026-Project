@@ -1,4 +1,13 @@
-# Captain Sonar Prototype
+# Captain Sonar — Multi-Agent Game Prototype
+
+Python coursework prototype with submarine actions, team-agent coordination, event logs, and replay support. Requires Python 3.11 or later. The project includes an automated pytest suite in `tests/`.
+
+## Test
+
+```sh
+python -m pip install -r requirements-dev.txt
+PYTHONPATH=src python -m pytest
+```
 
 ## Setup
 
